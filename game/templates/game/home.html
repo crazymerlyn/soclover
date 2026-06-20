@@ -71,7 +71,7 @@
       <input type="hidden" name="name" id="joinNameCopy">
       <div class="code-row">
         <input class="code-input" type="text" name="code" placeholder="ROOM CODE"
-               maxlength="6" value="{{ request.POST.code|default:'' }}">
+               maxlength="6" value="{{ request.POST.code|default:code_preset|default:'' }}">
         <button type="submit" class="btn btn-outline">
           Join →
         </button>

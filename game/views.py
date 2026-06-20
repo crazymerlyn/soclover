@@ -4,6 +4,7 @@ import datetime
 
 from django.db import transaction
 from django.shortcuts import render, redirect
+from django.urls import reverse
 from django.http import JsonResponse, Http404
 from django.views.decorators.http import require_POST, require_GET
 from django.utils import timezone
@@ -146,7 +147,12 @@ def home(request):
                         )
                         return redirect("lobby", code=room.code)
 
-    return render(request, "game/home.html", {"error": error, "max_players": MAX_PLAYERS})
+    code_preset = request.GET.get("code", "").strip().upper()
+    return render(request, "game/home.html", {
+        "error": error,
+        "max_players": MAX_PLAYERS,
+        "code_preset": code_preset,
+    })
 
 
 def lobby(request, code):
@@ -157,7 +163,7 @@ def lobby(request, code):
     player = get_player(request, room)
 
     if not player:
-        return redirect("home")
+        return redirect(f"{reverse('home')}?code={code}")
     if room.status != Room.STATUS_LOBBY:
         return redirect("game_view", code=code)
 
@@ -172,7 +178,7 @@ def game_view(request, code):
     player = get_player(request, room)
 
     if not player:
-        return redirect("home")
+        return redirect(f"{reverse('home')}?code={code}")
     if room.status == Room.STATUS_LOBBY:
         return redirect("lobby", code=code)
 
