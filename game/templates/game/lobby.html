@@ -117,26 +117,32 @@ async function startGame() {
   const btn = document.getElementById('startBtn');
   btn.disabled = true;
   btn.textContent = 'Starting…';
-  const r = await fetch(`/api/${ROOM_CODE}/start/`, {
-    method:'POST',
-    headers:{'X-CSRFToken': CSRF_TOKEN}
-  });
-  const d = await r.json();
-  if (d.success) {
-    window.location.href = `/room/${ROOM_CODE}/game/`;
-  } else {
+  try {
+    const r = await fetch(`/api/${ROOM_CODE}/start/`, {
+      method:'POST',
+      headers:{'X-CSRFToken': CSRF_TOKEN}
+    });
+    const ct = r.headers.get('content-type') || '';
+    if (!ct.includes('json')) throw new Error('Unexpected response');
+    const d = await r.json();
+    if (d.success) {
+      window.location.href = `/room/${ROOM_CODE}/game/`;
+      return;
+    }
     alert(d.error || 'Could not start game');
-    btn.disabled = false;
-    btn.textContent = 'Start Game';
+  } catch {
+    alert('Could not start game. Please try again.');
   }
+  btn.disabled = false;
+  btn.textContent = 'Start Game';
 }
 
 function renderPlayers(players) {
   document.getElementById('playerCount').textContent = players.length;
   document.getElementById('playerItems').innerHTML = players.map(p => `
     <div class="player-item">
-      <div class="player-avatar">${p.name[0].toUpperCase()}</div>
-      <span class="player-name">${p.name}</span>
+      <div class="player-avatar">${(p.name||'?')[0].toUpperCase()}</div>
+      <span class="player-name">${p.name||'Unknown'}</span>
       ${p.is_host ? '<span class="badge">HOST</span>' : ''}
       ${p.id === MY_ID ? '<span class="badge you">YOU</span>' : ''}
     </div>
@@ -149,14 +155,19 @@ function renderPlayers(players) {
 }
 
 async function poll() {
-  const r = await fetch(`/api/${ROOM_CODE}/state/`).catch(()=>null);
-  if (!r) return;
-  const d = await r.json();
-  if (d.status !== 'lobby') {
-    window.location.href = `/room/${ROOM_CODE}/game/`;
-    return;
+  try {
+    const r = await fetch(`/api/${ROOM_CODE}/state/`);
+    const ct = r.headers.get('content-type') || '';
+    if (!ct.includes('json')) return;
+    const d = await r.json();
+    if (d.status !== 'lobby') {
+      window.location.href = `/room/${ROOM_CODE}/game/`;
+      return;
+    }
+    if (d.players) renderPlayers(d.players);
+  } catch {
+    // transient error — next poll will retry
   }
-  renderPlayers(d.players);
 }
 
 poll();

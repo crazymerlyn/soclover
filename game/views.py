@@ -193,28 +193,34 @@ def start_game(request, code):
     if len(players) < 2:
         return JsonResponse({"error": "Need at least 2 players."}, status=400)
 
+    needed = len(players) * 4
+    if needed > len(WORD_CARDS):
+        return JsonResponse({"error": "Not enough word cards for this many players."}, status=400)
+
     # Assign 4 unique cards to each player (unique across the room for variety)
     all_indices = list(range(len(WORD_CARDS)))
     random.shuffle(all_indices)
     used = 0
 
-    for p in players:
-        chosen = all_indices[used : used + 4]
-        used += 4
-        arrangement = {}
-        for pos, idx in zip(["n", "e", "s", "w"], chosen):
-            arrangement[pos] = {
-                "words": list(WORD_CARDS[idx]),
-                "flipped": random.choice([True, False]),
-                "card_idx": idx,
-            }
-        Clover.objects.create(
-            player=p,
-            data={"arrangement": arrangement, "clues": {}, "cards": []},
-        )
+    with transaction.atomic():
+        for p in players:
+            chosen = all_indices[used : used + 4]
+            used += 4
+            arrangement = {}
+            for pos, idx in zip(["n", "e", "s", "w"], chosen):
+                arrangement[pos] = {
+                    "words": list(WORD_CARDS[idx]),
+                    "flipped": random.choice([True, False]),
+                    "card_idx": idx,
+                }
+            Clover.objects.create(
+                player=p,
+                data={"arrangement": arrangement, "clues": {}, "cards": []},
+            )
 
-    room.status = Room.STATUS_WRITING
-    room.save()
+        room.status = Room.STATUS_WRITING
+        room.save()
+
     return JsonResponse({"success": True})
 
 
@@ -257,7 +263,10 @@ def get_state(request, code):
         ordered = list(room.players.order_by("order"))
         idx = room.current_clover_index
         owner = ordered[idx]
-        clover = owner.clover
+        try:
+            clover = owner.clover
+        except AttributeError:
+            return JsonResponse({"error": "Clover not found for owner."}, status=500)
         is_owner = player.id == owner.id
 
         submitted_count = Guess.objects.filter(clover=clover, submitted=True).count()
@@ -419,6 +428,9 @@ def submit_guess(request, code):
     )
 
     with transaction.atomic():
+        # Lock the player row to prevent concurrent score corruption
+        player = Player.objects.select_for_update().get(id=player.id)
+
         # Upsert guess
         guess, created = Guess.objects.get_or_create(
             guesser=player,
@@ -427,7 +439,6 @@ def submit_guess(request, code):
         )
         if not created:
             # Undo previous score contribution
-            player = Player.objects.select_for_update().get(id=player.id)
             player.score = max(0, player.score - guess.score)
             guess.data = guess_arr
             guess.score = score

@@ -209,7 +209,7 @@
 
   <!-- Main area -->
   <div class="main-area" id="mainArea">
-    <div class="msg-waiting">Loading<span style="animation:dots 1s infinite">...</span></div>
+    <div class="msg-waiting">Loading…</div>
   </div>
 </div>
 {% endblock %}
@@ -273,8 +273,13 @@ function renderSidebar(players, status) {
 // ─────────── Writing phase ──────────────────────────────────────────────────
 function renderWriting(state) {
   const w   = state.writing;
-  const sub = w.submitted;
   document.getElementById('phaseLabel').textContent = '✏️ Writing phase';
+
+  if (w.error) {
+    document.getElementById('mainArea').innerHTML = `<div class="msg-error">${w.error}</div>`;
+    return;
+  }
+  const sub = w.submitted;
 
   // Count how many submitted
   const done = state.players.filter(p=>p.clues_submitted).length;
