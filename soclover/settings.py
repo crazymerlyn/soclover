@@ -25,6 +25,7 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'soclover.urls'
+WSGI_APPLICATION = 'soclover.wsgi.application'
 
 TEMPLATES = [
     {
