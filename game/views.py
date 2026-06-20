@@ -178,31 +178,31 @@ def game_view(request, code):
 
 @require_POST
 def start_game(request, code):
-    try:
-        room = get_room_or_json404(code)
-    except Http404:
-        return JsonResponse({"error": "Room not found."}, status=404)
-    player = get_player(request, room)
-
-    if not player or not player.is_host:
-        return JsonResponse({"error": "Only the host can start the game."}, status=403)
-    if room.status != Room.STATUS_LOBBY:
-        return JsonResponse({"error": "Game already started."}, status=400)
-
-    players = list(room.players.order_by("order"))
-    if len(players) < 2:
-        return JsonResponse({"error": "Need at least 2 players."}, status=400)
-
-    needed = len(players) * 4
-    if needed > len(WORD_CARDS):
-        return JsonResponse({"error": "Not enough word cards for this many players."}, status=400)
-
-    # Assign 4 unique cards to each player (unique across the room for variety)
-    all_indices = list(range(len(WORD_CARDS)))
-    random.shuffle(all_indices)
-    used = 0
-
     with transaction.atomic():
+        try:
+            room = Room.objects.select_for_update().get(code=code)
+        except Room.DoesNotExist:
+            return JsonResponse({"error": "Room not found."}, status=404)
+        player = get_player(request, room)
+
+        if not player or not player.is_host:
+            return JsonResponse({"error": "Only the host can start the game."}, status=403)
+        if room.status != Room.STATUS_LOBBY:
+            return JsonResponse({"error": "Game already started."}, status=400)
+
+        players = list(room.players.order_by("order"))
+        if len(players) < 2:
+            return JsonResponse({"error": "Need at least 2 players."}, status=400)
+
+        needed = len(players) * 4
+        if needed > len(WORD_CARDS):
+            return JsonResponse({"error": "Not enough word cards for this many players."}, status=400)
+
+        # Assign 4 unique cards to each player (unique across the room for variety)
+        all_indices = list(range(len(WORD_CARDS)))
+        random.shuffle(all_indices)
+        used = 0
+
         for p in players:
             chosen = all_indices[used : used + 4]
             used += 4
