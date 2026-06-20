@@ -128,17 +128,21 @@ def home(request):
                 elif room.players.count() >= MAX_PLAYERS:
                     error = "Room is full (max {} players).".format(MAX_PLAYERS)
                 else:
-                    # Upsert player for this session
-                    player, _ = Player.objects.get_or_create(
-                        room=room,
-                        session_key=sk,
-                        defaults={
-                            "name": player_name,
-                            "is_host": False,
-                            "order": room.players.count(),
-                        },
-                    )
-                    return redirect("lobby", code=room.code)
+                    # Check if another player in this room already has this name
+                    if room.players.filter(name__iexact=player_name).exclude(session_key=sk).exists():
+                        error = "That name is already taken in this room. Please choose another name."
+                    else:
+                        # Upsert player for this session
+                        player, _ = Player.objects.get_or_create(
+                            room=room,
+                            session_key=sk,
+                            defaults={
+                                "name": player_name,
+                                "is_host": False,
+                                "order": room.players.count(),
+                            },
+                        )
+                        return redirect("lobby", code=room.code)
 
     return render(request, "game/home.html", {"error": error, "max_players": MAX_PLAYERS})
 
