@@ -794,6 +794,18 @@ async function poll() {
   else if (state.status === 'finished') renderFinished(state);
 }
 
+window.addEventListener('beforeunload', (e) => {
+  if (lastState) {
+    const isWritingActive = lastState.status === 'writing' && lastState.writing && !lastState.writing.submitted;
+    const isGuessingActive = lastState.status === 'guessing' && lastState.guessing && !lastState.guessing.is_owner && (!lastState.guessing.my_guess || !lastState.guessing.my_guess.submitted);
+    if (isWritingActive || isGuessingActive) {
+      e.preventDefault();
+      e.returnValue = 'Are you sure you want to leave the game? Your unsubmitted clues/guesses will be lost.';
+      return e.returnValue;
+    }
+  }
+});
+
 poll();
 setInterval(poll, 2500);
 </script>
