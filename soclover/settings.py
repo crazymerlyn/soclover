@@ -55,6 +55,9 @@ DATABASES = {
     'default': dj_database_url.config(default=_DEFAULT_DB)
 }
 
+if DATABASES['default']['ENGINE'].endswith('sqlite3'):
+    DATABASES['default'].setdefault('OPTIONS', {})['timeout'] = 20
+
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 SESSION_COOKIE_AGE = 86400  # 24 hours
 
