@@ -41,8 +41,10 @@ TEMPLATES = [
 ]
 
 import dj_database_url
+ON_VERCEL = os.environ.get('VERCEL', False)
+_DEFAULT_DB = f'sqlite:////tmp/db.sqlite3' if ON_VERCEL else f'sqlite:///{BASE_DIR / "db.sqlite3"}'
 DATABASES = {
-    'default': dj_database_url.config(default=f'sqlite:///{BASE_DIR / "db.sqlite3"}')
+    'default': dj_database_url.config(default=_DEFAULT_DB)
 }
 
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
