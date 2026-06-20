@@ -243,17 +243,24 @@ function pips(score, total=4) {
 }
 
 // ─────────── sidebar ───────────────────────────────────────────────────────
-function renderSidebar(players, status) {
+function renderSidebar(players, status, extra) {
   const list = document.getElementById('playerList');
   list.innerHTML = players.map(p => {
     const isMe = p.id === MY_ID;
-    const done = status==='writing' ? (p.clues_submitted ? '✅' : '⌛') : '';
+    let indicator = '';
+    if (status==='writing') {
+      indicator = p.clues_submitted ? '✅' : '⌛';
+    } else if (status==='guessing' || status==='scoring') {
+      if (p.guess_submitted===true) indicator = '✅';
+      else if (p.guess_submitted===false && !p.is_host) indicator = '⌛';
+    }
+    const dotClass = (p.clues_submitted || p.guess_submitted) ? 'done' : '';
     return `
       <div class="sp-item">
-        <div class="sp-dot ${p.clues_submitted?'done':''}"></div>
+        <div class="sp-dot ${dotClass}"></div>
         <span style="flex:1;${isMe?'font-weight:700':''}">${p.name}${isMe?' (you)':''}</span>
         <span class="sp-score">${p.score}</span>
-        ${done ? `<span style="font-size:.8rem">${done}</span>` : ''}
+        ${indicator ? `<span style="font-size:.8rem">${indicator}</span>` : ''}
       </div>
     `;
   }).join('');
@@ -602,7 +609,12 @@ function flipCard(pos) {
 
 async function submitGuess() {
   if (Object.values(placed).some(v=>!v)) { alert('Place all 4 cards first.'); return; }
-  const d = await apiPost(`/api/${ROOM_CODE}/submit-guess/`, {arrangement: placed});
+  const cloverIndex = lastState?.guessing?.clover_index;
+  if (cloverIndex === undefined) { alert('Game state error. Please refresh.'); return; }
+  const d = await apiPost(`/api/${ROOM_CODE}/submit-guess/`, {
+    arrangement: placed,
+    clover_index: cloverIndex
+  });
   if (d.success) {
     alert(`You got ${d.score}/4 correct! 🎉`);
     poll();
@@ -724,13 +736,18 @@ function renderFinished(state) {
 let lastState = null;
 
 async function poll() {
-  const r = await fetch(`/api/${ROOM_CODE}/state/`).catch(()=>null);
-  if (!r) return;
-  const state = await r.json();
+  let state;
+  try {
+    const r = await fetch(`/api/${ROOM_CODE}/state/`);
+    if (!r.ok) return;
+    state = await r.json();
+  } catch {
+    return;
+  }
   if (state.error) return;
 
   lastState = state;
-  renderSidebar(state.players, state.status);
+  if (state.players) renderSidebar(state.players, state.status);
 
   const key = state.status + (state.guessing?.clover_index??'');
   const changed = key !== lastGuessing;

@@ -3,8 +3,18 @@ import string
 from django.db import models
 
 
+MAX_PLAYERS = 8
+
 def generate_room_code():
     return ''.join(random.choices(string.ascii_uppercase, k=6))
+
+
+def create_room_with_retry(max_attempts=10):
+    for _ in range(max_attempts):
+        code = generate_room_code()
+        if not Room.objects.filter(code=code).exists():
+            return code
+    raise RuntimeError("Could not generate unique room code")
 
 
 class Room(models.Model):

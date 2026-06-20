@@ -55,8 +55,8 @@
 .player-name { font-weight:600; }
 .badge { font-size:.7rem; background: var(--gold); color:#fff; padding:2px 8px; border-radius:20px; margin-left:6px; }
 .badge.you { background: var(--green-light); }
-.waiting-dots::after { content:''; animation: dots 1.2s infinite; }
-@keyframes dots { 0%{content:'.'} 33%{content:'..'} 66%{content:'...'} 100%{content:'.'} }
+.waiting-dots::after { content:'...'; animation: dots 1.2s steps(4, end) infinite; }
+@keyframes dots { 0%{opacity:0} 50%{opacity:1} 100%{opacity:0} }
 {% endblock %}
 
 {% block content %}

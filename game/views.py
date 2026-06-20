@@ -1,12 +1,12 @@
 import json
 import random
 
-from django.shortcuts import render, redirect, get_object_or_404
-from django.http import JsonResponse
+from django.db import transaction
+from django.shortcuts import render, redirect
+from django.http import JsonResponse, Http404
 from django.views.decorators.http import require_POST, require_GET
-from django.views.decorators.csrf import csrf_exempt
 
-from .models import Room, Player, Clover, Guess
+from .models import MAX_PLAYERS, Room, Player, Clover, Guess, create_room_with_retry
 from .words import WORD_CARDS
 
 
@@ -24,6 +24,13 @@ def get_player(request, room):
     if not sk:
         return None
     return Player.objects.filter(room=room, session_key=sk).first()
+
+
+def get_room_or_json404(code):
+    try:
+        return Room.objects.get(code=code)
+    except Room.DoesNotExist:
+        raise Http404("Room not found.")
 
 
 def primary(card_entry):
@@ -55,17 +62,24 @@ def get_edge_words(arrangement):
     }
 
 
-def players_list(room, include_submitted=False):
+def players_list(room, include_submitted=False, include_guess_submitted=None):
+    qs = room.players.select_related("clover").order_by("order")
     out = []
-    for p in room.players.order_by("order"):
+    for p in qs:
         d = {
             "id": p.id,
             "name": p.name,
             "is_host": p.is_host,
             "score": p.score,
         }
-        if include_submitted and hasattr(p, "clover"):
-            d["clues_submitted"] = p.clover.clues_submitted
+        if include_submitted:
+            try:
+                d["clues_submitted"] = p.clover.clues_submitted
+            except AttributeError:
+                d["clues_submitted"] = False
+        if include_guess_submitted is not None:
+            g = Guess.objects.filter(guesser=p, clover=include_guess_submitted).first()
+            d["guess_submitted"] = g.submitted if g else False
         out.append(d)
     return out
 
@@ -85,7 +99,11 @@ def home(request):
             sk = ensure_session(request)
 
             if action == "create":
-                room = Room.objects.create()
+                try:
+                    code = create_room_with_retry()
+                except RuntimeError as e:
+                    return render(request, "game/home.html", {"error": str(e)})
+                room = Room.objects.create(code=code)
                 Player.objects.create(
                     room=room,
                     name=player_name,
@@ -102,6 +120,8 @@ def home(request):
                     error = "Room not found. Check the code and try again."
                 elif room.status != Room.STATUS_LOBBY:
                     error = "That game is already in progress."
+                elif room.players.count() >= MAX_PLAYERS:
+                    error = "Room is full (max {} players).".format(MAX_PLAYERS)
                 else:
                     # Upsert player for this session
                     player, _ = Player.objects.get_or_create(
@@ -119,7 +139,10 @@ def home(request):
 
 
 def lobby(request, code):
-    room = get_object_or_404(Room, code=code)
+    try:
+        room = get_room_or_json404(code)
+    except Http404:
+        return redirect("home")
     player = get_player(request, room)
 
     if not player:
@@ -131,7 +154,10 @@ def lobby(request, code):
 
 
 def game_view(request, code):
-    room = get_object_or_404(Room, code=code)
+    try:
+        room = get_room_or_json404(code)
+    except Http404:
+        return redirect("home")
     player = get_player(request, room)
 
     if not player:
@@ -147,7 +173,10 @@ def game_view(request, code):
 
 @require_POST
 def start_game(request, code):
-    room = get_object_or_404(Room, code=code)
+    try:
+        room = get_room_or_json404(code)
+    except Http404:
+        return JsonResponse({"error": "Room not found."}, status=404)
     player = get_player(request, room)
 
     if not player or not player.is_host:
@@ -156,8 +185,8 @@ def start_game(request, code):
         return JsonResponse({"error": "Game already started."}, status=400)
 
     players = list(room.players.order_by("order"))
-    # if len(players) < 2:
-    #     return JsonResponse({'error': 'Need at least 2 players.'}, status=400)
+    if len(players) < 2:
+        return JsonResponse({"error": "Need at least 2 players."}, status=400)
 
     # Assign 4 unique cards to each player (unique across the room for variety)
     all_indices = list(range(len(WORD_CARDS)))
@@ -186,7 +215,10 @@ def start_game(request, code):
 
 @require_GET
 def get_state(request, code):
-    room = get_object_or_404(Room, code=code)
+    try:
+        room = get_room_or_json404(code)
+    except Http404:
+        return JsonResponse({"error": "Room not found."}, status=404)
     player = get_player(request, room)
 
     if not player:
@@ -194,16 +226,15 @@ def get_state(request, code):
 
     state = {
         "status": room.status,
-        "players": players_list(
-            room, include_submitted=(room.status == Room.STATUS_WRITING)
-        ),
-        "my_player_id": player.id,
-        "is_host": player.is_host,
         "room_code": room.code,
     }
 
     # ── Writing phase ───────────────────────────────────────────────────────
     if room.status == Room.STATUS_WRITING:
+        state["players"] = players_list(room, include_submitted=True)
+        state["my_player_id"] = player.id
+        state["is_host"] = player.is_host
+
         clover = getattr(player, "clover", None)
         if clover:
             edges = get_edge_words(clover.data["arrangement"])
@@ -234,12 +265,17 @@ def get_state(request, code):
                     "score": g.score,
                 }
 
+        state["players"] = players_list(
+            room, include_guess_submitted=clover
+        )
+        state["my_player_id"] = player.id
+        state["is_host"] = player.is_host
         state["guessing"] = {
             "owner_name": owner.name,
             "owner_id": owner.id,
             "is_owner": is_owner,
             "clues": clover.data.get("clues", {}),
-            "cards": clover.data.get("cards", []),
+            "cards": clover.data.get("cards", []) if not is_owner else [],
             "submitted_count": submitted_count,
             "total_guessers": total_guessers,
             "all_submitted": submitted_count >= total_guessers,
@@ -271,6 +307,9 @@ def get_state(request, code):
 
     # ── Finished ────────────────────────────────────────────────────────────
     elif room.status == Room.STATUS_FINISHED:
+        state["players"] = players_list(room)
+        state["my_player_id"] = player.id
+        state["is_host"] = player.is_host
         state["final_scores"] = [
             {"name": p.name, "score": p.score} for p in room.players.order_by("-score")
         ]
@@ -280,7 +319,10 @@ def get_state(request, code):
 
 @require_POST
 def submit_clues(request, code):
-    room = get_object_or_404(Room, code=code)
+    try:
+        room = get_room_or_json404(code)
+    except Http404:
+        return JsonResponse({"error": "Room not found."}, status=404)
     player = get_player(request, room)
 
     if not player or room.status != Room.STATUS_WRITING:
@@ -291,6 +333,13 @@ def submit_clues(request, code):
 
     if not all(clues.values()):
         return JsonResponse({"error": "All four clues are required."}, status=400)
+
+    for k, v in clues.items():
+        if " " in v:
+            return JsonResponse(
+                {"error": "Clues must be single words (no spaces)."},
+                status=400,
+            )
 
     clover = player.clover
     clover.data["clues"] = clues
@@ -324,7 +373,10 @@ def submit_clues(request, code):
 
 @require_POST
 def submit_guess(request, code):
-    room = get_object_or_404(Room, code=code)
+    try:
+        room = get_room_or_json404(code)
+    except Http404:
+        return JsonResponse({"error": "Room not found."}, status=404)
     player = get_player(request, room)
 
     if not player or room.status not in (Room.STATUS_GUESSING, Room.STATUS_SCORING):
@@ -336,49 +388,66 @@ def submit_guess(request, code):
     if player.id == owner.id:
         return JsonResponse({"error": "Can't guess your own clover."}, status=400)
 
-    clover = owner.clover
     body = json.loads(request.body)
+
+    # Verify client knows which clover it's guessing (prevent stale-client race)
+    client_clover_idx = body.get("clover_index")
+    if client_clover_idx is None or client_clover_idx != room.current_clover_index:
+        return JsonResponse({
+            "error": "Stale guess submission. Please refresh and try again.",
+        }, status=409)
+
+    clover = owner.clover
     guess_arr = body.get("arrangement", {})
+
+    # Validate arrangement structure
+    valid_positions = {"n", "e", "s", "w"}
+    if not all(p in guess_arr and isinstance(guess_arr[p], dict) and "idx" in guess_arr[p] for p in valid_positions):
+        return JsonResponse({"error": "Invalid arrangement data."}, status=400)
 
     # Score: 1 point per position with correct card_idx
     correct_arr = clover.data["arrangement"]
     score = sum(
         1
-        for pos in ("n", "e", "s", "w")
-        if pos in guess_arr
-        and guess_arr[pos].get("idx") == correct_arr[pos]["card_idx"]
+        for pos in valid_positions
+        if guess_arr[pos].get("idx") == correct_arr[pos]["card_idx"]
     )
 
-    # Upsert guess
-    guess, created = Guess.objects.get_or_create(
-        guesser=player,
-        clover=clover,
-        defaults={"data": guess_arr, "score": score, "submitted": True},
-    )
-    if not created:
-        # Undo previous score contribution
-        player.score = max(0, player.score - guess.score)
-        guess.data = guess_arr
-        guess.score = score
-        guess.submitted = True
-        guess.save()
+    with transaction.atomic():
+        # Upsert guess
+        guess, created = Guess.objects.get_or_create(
+            guesser=player,
+            clover=clover,
+            defaults={"data": guess_arr, "score": score, "submitted": True},
+        )
+        if not created:
+            # Undo previous score contribution
+            player = Player.objects.select_for_update().get(id=player.id)
+            player.score = max(0, player.score - guess.score)
+            guess.data = guess_arr
+            guess.score = score
+            guess.submitted = True
+            guess.save()
 
-    player.score += score
-    player.save()
+        player.score += score
+        player.save()
 
-    # Check if all non-owners have submitted
-    submitted = Guess.objects.filter(clover=clover, submitted=True).count()
-    total_g = room.players.count() - 1
-    if submitted >= total_g:
-        room.status = Room.STATUS_SCORING
-        room.save()
+        # Check if all non-owners have submitted
+        submitted = Guess.objects.filter(clover=clover, submitted=True).count()
+        total_g = room.players.count() - 1
+        if submitted >= total_g:
+            room.status = Room.STATUS_SCORING
+            room.save(update_fields=["status"])
 
     return JsonResponse({"success": True, "score": score})
 
 
 @require_POST
 def next_clover(request, code):
-    room = get_object_or_404(Room, code=code)
+    try:
+        room = get_room_or_json404(code)
+    except Http404:
+        return JsonResponse({"error": "Room not found."}, status=404)
     player = get_player(request, room)
 
     if not player or not player.is_host:
