@@ -1,0 +1,10 @@
+{
+  "buildCommand": "pip install -r requirements.txt && python manage.py collectstatic --no-input",
+  "outputDirectory": ".",
+  "functions": {
+    "soclover/wsgi.py": {
+      "runtime": "python3.12",
+      "memory": 512
+    }
+  }
+}
