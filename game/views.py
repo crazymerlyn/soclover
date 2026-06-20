@@ -252,7 +252,16 @@ def get_state(request, code):
 
     # Host handover check
     host = room.players.filter(is_host=True).first()
-    if host and timezone.now() - host.last_active > datetime.timedelta(seconds=15):
+    if host is None:
+        with transaction.atomic():
+            if not Player.objects.select_for_update().filter(room=room, is_host=True).exists():
+                next_host = Player.objects.select_for_update().filter(room=room).order_by('joined_at').first()
+                if next_host:
+                    next_host.is_host = True
+                    next_host.save(update_fields=['is_host'])
+                    if player.id == next_host.id:
+                        player.is_host = True
+    elif timezone.now() - host.last_active > datetime.timedelta(seconds=15):
         with transaction.atomic():
             locked_host = Player.objects.select_for_update().filter(room=room, is_host=True).first()
             if locked_host and timezone.now() - locked_host.last_active > datetime.timedelta(seconds=15):
