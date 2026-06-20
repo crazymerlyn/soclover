@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🍀 So Clover Online</title>
+  <style>
+    :root {
+      --green:      #2d7a3a;
+      --green-light:#4caf50;
+      --green-pale: #e8f5e9;
+      --gold:       #f9a825;
+      --red:        #c62828;
+      --card-bg:    #fffde7;
+      --card-border:#f0c060;
+      --hint-bg:    #fff9c4;
+      --hint-border:#f9a825;
+      --radius:     12px;
+      --shadow:     0 4px 16px rgba(0,0,0,.12);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%);
+      min-height: 100vh;
+      color: #1b2d1f;
+    }
+    header {
+      background: var(--green);
+      color: #fff;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: var(--shadow);
+    }
+    header h1 { font-size: 1.5rem; letter-spacing: .5px; }
+    header .room-code {
+      margin-left: auto;
+      background: rgba(255,255,255,.2);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-weight: 700;
+      font-size: 1rem;
+      letter-spacing: 2px;
+    }
+    main { max-width: 1100px; margin: 0 auto; padding: 32px 16px; }
+
+    /* ── buttons ── */
+    .btn {
+      display: inline-block;
+      padding: 10px 24px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: .95rem;
+      font-weight: 600;
+      transition: transform .1s, box-shadow .1s;
+    }
+    .btn:hover  { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.15); }
+    .btn:active { transform: translateY(0); }
+    .btn-green  { background: var(--green-light); color: #fff; }
+    .btn-gold   { background: var(--gold); color: #fff; }
+    .btn-red    { background: var(--red); color: #fff; }
+    .btn-outline{ background: transparent; border: 2px solid var(--green); color: var(--green); }
+    .btn:disabled { opacity:.45; cursor:not-allowed; transform:none; box-shadow:none; }
+
+    /* ── cards ── */
+    .word-card {
+      background: var(--card-bg);
+      border: 2px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: border-color .15s, transform .15s, box-shadow .15s;
+      min-width: 120px;
+    }
+    .word-card:hover       { border-color: var(--green-light); transform: translateY(-2px); box-shadow: var(--shadow); }
+    .word-card.selected    { border-color: var(--green); background: #dcedc8; box-shadow: 0 0 0 3px var(--green-light); }
+    .word-card.placed      { border-color: #aaa; background: #f9f9f9; cursor: default; opacity: .6; }
+    .word-card .w-top      { font-weight: 700; font-size: .9rem; text-transform: uppercase; letter-spacing: .5px; }
+    .word-card .w-divider  { width: 40px; height: 1px; background: var(--card-border); }
+    .word-card .w-bottom   { font-weight: 700; font-size: .9rem; text-transform: uppercase; letter-spacing: .5px; color: #555; }
+
+    /* ── hint chip ── */
+    .hint-chip {
+      background: var(--hint-bg);
+      border: 2px solid var(--hint-border);
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-weight: 700;
+      font-size: .85rem;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    /* ── messages ── */
+    .msg-waiting { text-align:center; color:#666; padding: 24px; font-style:italic; }
+    .msg-error   { background:#ffebee; border:1px solid #e57373; color:#c62828; border-radius:8px; padding:12px 16px; margin:12px 0; }
+    .msg-success { background:#e8f5e9; border:1px solid #81c784; color:#2e7d32; border-radius:8px; padding:12px 16px; margin:12px 0; }
+
+    {% block extra_style %}{% endblock %}
+  </style>
+</head>
+<body>
+<header>
+  <span style="font-size:1.8rem">🍀</span>
+  <h1>So Clover</h1>
+  {% block header_extra %}{% endblock %}
+</header>
+<main>
+  {% block content %}{% endblock %}
+</main>
+{% block scripts %}{% endblock %}
+</body>
+</html>

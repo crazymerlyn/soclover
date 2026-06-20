@@ -1,0 +1,158 @@
+{% extends "game/base.html" %}
+
+{% block header_extra %}
+<span class="room-code">{{ room.code }}</span>
+{% endblock %}
+
+{% block extra_style %}
+.lobby-wrap { max-width:500px; margin:0 auto; }
+.lobby-wrap h2 { font-size:1.6rem; margin-bottom:8px; color: var(--green); }
+.share-box {
+  background:#fff;
+  border-radius:12px;
+  padding:20px 24px;
+  box-shadow: var(--shadow);
+  margin-bottom:24px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.share-box .code-big {
+  font-size:2.5rem;
+  font-weight:800;
+  letter-spacing:8px;
+  color: var(--green);
+}
+.player-list {
+  background:#fff;
+  border-radius:12px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  margin-bottom:24px;
+}
+.player-list h3 { padding:14px 20px; background: var(--green-pale); font-size:1rem; color: var(--green); border-bottom:1px solid #c8e6c9; }
+.player-item {
+  display:flex;
+  align-items:center;
+  padding:12px 20px;
+  border-bottom:1px solid #f0f0f0;
+  gap:10px;
+}
+.player-item:last-child { border-bottom:none; }
+.player-avatar {
+  width:36px; height:36px;
+  border-radius:50%;
+  background: var(--green-light);
+  color:#fff;
+  font-weight:700;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:1rem;
+  flex-shrink:0;
+}
+.player-name { font-weight:600; }
+.badge { font-size:.7rem; background: var(--gold); color:#fff; padding:2px 8px; border-radius:20px; margin-left:6px; }
+.badge.you { background: var(--green-light); }
+.waiting-dots::after { content:''; animation: dots 1.2s infinite; }
+@keyframes dots { 0%{content:'.'} 33%{content:'..'} 66%{content:'...'} 100%{content:'.'} }
+{% endblock %}
+
+{% block content %}
+<div class="lobby-wrap">
+  <h2>Waiting for players…</h2>
+  <p style="color:#666;margin-bottom:20px;">Share the room code with your friends.</p>
+
+  <div class="share-box">
+    <div>
+      <div style="font-size:.8rem;color:#888;margin-bottom:4px;">Room Code</div>
+      <div class="code-big">{{ room.code }}</div>
+    </div>
+    <button class="btn btn-outline" onclick="copyCode()">📋 Copy</button>
+  </div>
+
+  <div class="player-list">
+    <h3>Players (<span id="playerCount">0</span>)</h3>
+    <div id="playerItems"></div>
+  </div>
+
+  {% if player.is_host %}
+  <button id="startBtn" class="btn btn-green" style="width:100%;padding:14px;font-size:1rem;" onclick="startGame()" disabled>
+    Start Game
+  </button>
+  <p style="text-align:center;color:#999;font-size:.85rem;margin-top:8px;">Need at least 2 players</p>
+  {% else %}
+  <div class="msg-waiting">Waiting for the host to start the game<span class="waiting-dots"></span></div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const ROOM_CODE = "{{ room.code }}";
+const MY_ID     = {{ player.id }};
+const IS_HOST   = {{ player.is_host|yesno:"true,false" }};
+
+async function copyCode() {
+  await navigator.clipboard.writeText(ROOM_CODE).catch(()=>{});
+  const btn = document.querySelector('.share-box .btn');
+  btn.textContent = '✅ Copied!';
+  setTimeout(()=>btn.textContent='📋 Copy', 2000);
+}
+
+async function startGame() {
+  const btn = document.getElementById('startBtn');
+  btn.disabled = true;
+  btn.textContent = 'Starting…';
+  const r = await fetch(`/api/${ROOM_CODE}/start/`, {
+    method:'POST',
+    headers:{'X-CSRFToken': getCookie('csrftoken')}
+  });
+  const d = await r.json();
+  if (d.success) {
+    window.location.href = `/room/${ROOM_CODE}/game/`;
+  } else {
+    alert(d.error || 'Could not start game');
+    btn.disabled = false;
+    btn.textContent = 'Start Game';
+  }
+}
+
+function getCookie(name) {
+  let v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+  return v ? v[2] : null;
+}
+
+function renderPlayers(players) {
+  document.getElementById('playerCount').textContent = players.length;
+  document.getElementById('playerItems').innerHTML = players.map(p => `
+    <div class="player-item">
+      <div class="player-avatar">${p.name[0].toUpperCase()}</div>
+      <span class="player-name">${p.name}</span>
+      ${p.is_host ? '<span class="badge">HOST</span>' : ''}
+      ${p.id === MY_ID ? '<span class="badge you">YOU</span>' : ''}
+    </div>
+  `).join('');
+
+  if (IS_HOST) {
+    const btn = document.getElementById('startBtn');
+    btn.disabled = players.length < 2;
+  }
+}
+
+async function poll() {
+  const r = await fetch(`/api/${ROOM_CODE}/state/`).catch(()=>null);
+  if (!r) return;
+  const d = await r.json();
+  if (d.status !== 'lobby') {
+    window.location.href = `/room/${ROOM_CODE}/game/`;
+    return;
+  }
+  renderPlayers(d.players);
+}
+
+poll();
+setInterval(poll, 2000);
+</script>
+{% endblock %}
