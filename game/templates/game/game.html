@@ -735,9 +735,9 @@ function renderFinished(state) {
       <p style="color:#888;margin-bottom:24px;">Final Scores</p>
       <div class="score-board">
         ${scores.map((p,i)=>`
-          <div class="sb-row ${p.name===state.players.find(pl=>pl.id===MY_ID)?.name||''?'':''}">
+          <div class="sb-row" style="${p.id===MY_ID?'font-weight:700':''}">
             <div class="sb-rank">${medals[i]||'  '}</div>
-            <div class="sb-name">${p.name}</div>
+            <div class="sb-name">${p.name}${p.id===MY_ID?' (you)':''}</div>
             <div class="sb-score">${p.score}</div>
           </div>
         `).join('')}

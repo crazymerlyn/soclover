@@ -68,6 +68,7 @@
     <form method="post" id="joinForm">
       {% csrf_token %}
       <input type="hidden" name="action" value="join">
+      <input type="hidden" name="name" id="joinNameCopy">
       <div class="code-row">
         <input class="code-input" type="text" name="code" placeholder="ROOM CODE"
                maxlength="6" value="{{ request.POST.code|default:'' }}">
@@ -85,7 +86,7 @@
       document.getElementById('nameCopy').value = document.getElementById('nameField').value;
     });
     document.getElementById('joinForm').addEventListener('submit', function() {
-      document.getElementById('nameCopy').value = document.getElementById('nameField').value;
+      document.getElementById('joinNameCopy').value = document.getElementById('nameField').value;
     });
     syncName();
     </script>

@@ -323,7 +323,8 @@ def get_state(request, code):
     # ── Finished ────────────────────────────────────────────────────────────
     elif room.status == Room.STATUS_FINISHED:
         state["final_scores"] = [
-            {"name": p.name, "score": p.score} for p in room.players.order_by("-score")
+            {"id": p.id, "name": p.name, "score": p.score}
+            for p in room.players.order_by("-score")
         ]
 
     return JsonResponse(state)
@@ -397,25 +398,11 @@ def submit_guess(request, code):
     if not player or room.status not in (Room.STATUS_GUESSING, Room.STATUS_SCORING):
         return JsonResponse({"error": "Invalid state."}, status=400)
 
-    ordered = list(room.players.order_by("order"))
-    owner = ordered[room.current_clover_index]
-
-    if player.id == owner.id:
-        return JsonResponse({"error": "Can't guess your own clover."}, status=400)
-
     body = json.loads(request.body)
-
-    # Verify client knows which clover it's guessing (prevent stale-client race)
-    client_clover_idx = body.get("clover_index")
-    if client_clover_idx is None or client_clover_idx != room.current_clover_index:
-        return JsonResponse({
-            "error": "Stale guess submission. Please refresh and try again.",
-        }, status=409)
-
-    clover = owner.clover
     guess_arr = body.get("arrangement", {})
+    client_clover_idx = body.get("clover_index")
 
-    # Validate arrangement structure and card indices
+    # Validate arrangement structure and card indices early (pure Python, no DB)
     valid_positions = {"n", "e", "s", "w"}
     max_idx = len(WORD_CARDS) - 1
     for p in valid_positions:
@@ -425,17 +412,35 @@ def submit_guess(request, code):
         if not (0 <= entry["idx"] <= max_idx):
             return JsonResponse({"error": "Invalid card index."}, status=400)
 
-    # Score: 1 point per position with correct card_idx
-    correct_arr = clover.data["arrangement"]
-    score = sum(
-        1
-        for pos in valid_positions
-        if guess_arr[pos].get("idx") == correct_arr[pos]["card_idx"]
-    )
-
     with transaction.atomic():
-        # Lock the player row to prevent concurrent score corruption
+        # Lock player row AND room row to prevent races with next_clover
         player = Player.objects.select_for_update().get(id=player.id)
+        room = Room.objects.select_for_update().get(id=room.id)
+
+        # Re-verify state after acquiring locks
+        if room.status not in (Room.STATUS_GUESSING, Room.STATUS_SCORING):
+            return JsonResponse({"error": "Invalid state."}, status=400)
+
+        if client_clover_idx is None or client_clover_idx != room.current_clover_index:
+            return JsonResponse({
+                "error": "Stale guess submission. Please refresh and try again.",
+            }, status=409)
+
+        ordered = list(room.players.order_by("order"))
+        owner = ordered[room.current_clover_index]
+
+        if player.id == owner.id:
+            return JsonResponse({"error": "Can't guess your own clover."}, status=400)
+
+        clover = owner.clover
+
+        # Score: 1 point per position with correct card_idx
+        correct_arr = clover.data["arrangement"]
+        score = sum(
+            1
+            for pos in valid_positions
+            if guess_arr[pos].get("idx") == correct_arr[pos]["card_idx"]
+        )
 
         # Upsert guess
         guess, created = Guess.objects.get_or_create(
@@ -454,7 +459,7 @@ def submit_guess(request, code):
         player.score += score
         player.save()
 
-        # Check if all non-owners have submitted
+        # Check if all non-owners have submitted (serialized by room lock)
         submitted = Guess.objects.filter(clover=clover, submitted=True).count()
         total_g = room.players.count() - 1
         if submitted >= total_g:
@@ -477,12 +482,17 @@ def next_clover(request, code):
     if room.status != Room.STATUS_SCORING:
         return JsonResponse({"error": "Not in scoring phase."}, status=400)
 
-    next_idx = room.current_clover_index + 1
-    if next_idx >= room.players.count():
-        room.status = Room.STATUS_FINISHED
-    else:
-        room.status = Room.STATUS_GUESSING
-        room.current_clover_index = next_idx
-    room.save()
+    with transaction.atomic():
+        room = Room.objects.select_for_update().get(id=room.id)
+        if room.status != Room.STATUS_SCORING:
+            return JsonResponse({"error": "Not in scoring phase."}, status=400)
+
+        next_idx = room.current_clover_index + 1
+        if next_idx >= room.players.count():
+            room.status = Room.STATUS_FINISHED
+        else:
+            room.status = Room.STATUS_GUESSING
+            room.current_clover_index = next_idx
+        room.save()
 
     return JsonResponse({"success": True})
