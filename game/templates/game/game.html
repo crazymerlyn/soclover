@@ -223,19 +223,29 @@ const IS_HOST   = {{ player.is_host|yesno:"true,false" }};
 let lastStatus  = null;
 let lastGuessing = null;  // JSON key to detect change
 let selectedCardIdx = null;  // for click-to-place
+let placedDirty = false;  // track if user has manually modified cards
 
 // ─────────── helpers ───────────────────────────────────────────────────────
 function csrfToken() {
   let m = document.cookie.match('(^|;) ?csrftoken=([^;]*)(;|$)');
-  return m ? m[2] : '';
+  if (m) return m[2];
+  let el = document.querySelector('[name=csrfmiddlewaretoken]');
+  return el ? el.value : '';
 }
 async function apiPost(path, body) {
-  const r = await fetch(path, {
-    method:'POST',
-    headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken()},
-    body: JSON.stringify(body)
-  });
-  return r.json();
+  try {
+    const r = await fetch(path, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken()},
+      body: JSON.stringify(body)
+    });
+    const ct = r.headers.get('content-type') || '';
+    if (ct.includes('json')) return r.json();
+    await r.text();
+    return {success: false, error: `Server error (${r.status})`};
+  } catch {
+    return {success: false, error: 'Network error'};
+  }
 }
 
 function pips(score, total=4) {
@@ -409,11 +419,13 @@ function renderGuessing(state) {
     renderWaitingAfterGuess(g);
     return;
   }
-  // Restore placed state from existing guess if any
-  if (g.my_guess?.arrangement) {
-    placed = g.my_guess.arrangement;
-  } else {
-    placed = {n:null,e:null,s:null,w:null};
+  // Restore placed state from server only if user hasn't modified locally
+  if (!placedDirty) {
+    if (g.my_guess?.arrangement) {
+      placed = JSON.parse(JSON.stringify(g.my_guess.arrangement));
+    } else {
+      placed = {n:null,e:null,s:null,w:null};
+    }
   }
   renderGuesserBoard(g);
 }
@@ -583,7 +595,7 @@ function selectCard(idx) {
 
 function placeCard(pos) {
   if (selectedCardIdx===null) return;
-  // Check not already placed elsewhere
+  placedDirty = true;
   for (const [k,v] of Object.entries(placed)) {
     if (v && v.idx===selectedCardIdx) { placed[k]=null; break; }
   }
@@ -594,6 +606,7 @@ function placeCard(pos) {
 }
 
 function removeCard(pos) {
+  placedDirty = true;
   placed[pos] = null;
   const g = lastState?.guessing;
   if (g) renderGuesserBoard(g);
@@ -601,6 +614,7 @@ function removeCard(pos) {
 
 function flipCard(pos) {
   if (placed[pos]) {
+    placedDirty = true;
     placed[pos].flipped = !placed[pos].flipped;
     const g = lastState?.guessing;
     if (g) renderGuesserBoard(g);
@@ -739,7 +753,8 @@ async function poll() {
   let state;
   try {
     const r = await fetch(`/api/${ROOM_CODE}/state/`);
-    if (!r.ok) return;
+    const ct = r.headers.get('content-type') || '';
+    if (!ct.includes('json')) return;
     state = await r.json();
   } catch {
     return;
@@ -757,6 +772,7 @@ async function poll() {
   if (changed && state.status === 'guessing') {
     placed = {n:null,e:null,s:null,w:null};
     selectedCardIdx = null;
+    placedDirty = false;
   }
 
   if (state.status === 'writing')  renderWriting(state);
