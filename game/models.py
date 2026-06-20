@@ -1,6 +1,7 @@
 import random
 import string
 from django.db import models
+from django.utils import timezone
 
 
 MAX_PLAYERS = 8
@@ -44,6 +45,7 @@ class Player(models.Model):
     score = models.IntegerField(default=0)
     order = models.IntegerField(default=0)
     joined_at = models.DateTimeField(auto_now_add=True)
+    last_active = models.DateTimeField(default=timezone.now)
 
     class Meta:
         unique_together = [('room', 'session_key')]

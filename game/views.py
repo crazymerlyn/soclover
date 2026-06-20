@@ -1,10 +1,12 @@
 import json
 import random
+import datetime
 
 from django.db import transaction
 from django.shortcuts import render, redirect
 from django.http import JsonResponse, Http404
 from django.views.decorators.http import require_POST, require_GET
+from django.utils import timezone
 
 from .models import MAX_PLAYERS, Room, Player, Clover, Guess, create_room_with_retry
 from .words import WORD_CARDS
@@ -238,6 +240,29 @@ def get_state(request, code):
 
     if not player:
         return JsonResponse({"error": "Not in room."}, status=403)
+
+    # Update player's last active timestamp
+    Player.objects.filter(id=player.id).update(last_active=timezone.now())
+
+    # Host handover check
+    host = room.players.filter(is_host=True).first()
+    if host and timezone.now() - host.last_active > datetime.timedelta(seconds=15):
+        with transaction.atomic():
+            locked_host = Player.objects.select_for_update().filter(room=room, is_host=True).first()
+            if locked_host and timezone.now() - locked_host.last_active > datetime.timedelta(seconds=15):
+                next_host = Player.objects.select_for_update().filter(
+                    room=room,
+                    last_active__gt=timezone.now() - datetime.timedelta(seconds=15)
+                ).exclude(id=locked_host.id).order_by('order').first()
+                if next_host:
+                    locked_host.is_host = False
+                    locked_host.save(update_fields=['is_host'])
+                    next_host.is_host = True
+                    next_host.save(update_fields=['is_host'])
+                    if player.id == locked_host.id:
+                        player.is_host = False
+                    elif player.id == next_host.id:
+                        player.is_host = True
 
     state = {
         "status": room.status,
