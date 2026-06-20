@@ -220,6 +220,15 @@ const ROOM_CODE = "{{ room.code }}";
 const MY_ID     = {{ player.id }};
 const IS_HOST   = {{ player.is_host|yesno:"true,false" }};
 
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+}
+
 let lastStatus  = null;
 let lastGuessing = null;  // JSON key to detect change
 let selectedCardIdx = null;  // for click-to-place
@@ -259,10 +268,11 @@ function renderSidebar(players, status) {
       else if (p.guess_submitted===false && !p.is_host) indicator = '⌛';
     }
     const dotClass = (p.clues_submitted || p.guess_submitted) ? 'done' : '';
+    const escapedName = escapeHtml(p.name);
     return `
       <div class="sp-item">
         <div class="sp-dot ${dotClass}"></div>
-        <span style="flex:1;${isMe?'font-weight:700':''}">${p.name}${isMe?' (you)':''}</span>
+        <span style="flex:1;${isMe?'font-weight:700':''}">${escapedName}${isMe?' (you)':''}</span>
         <span class="sp-score">${p.score}</span>
         ${indicator ? `<span style="font-size:.8rem">${indicator}</span>` : ''}
       </div>
@@ -530,7 +540,7 @@ function renderGuesserBoard(g) {
 
   document.getElementById('mainArea').innerHTML = `
     <div class="section-box" style="padding:16px;">
-      <h3>Reconstruct ${g.owner_name}'s clover</h3>
+      <h3>Reconstruct ${escapeHtml(g.owner_name)}'s clover</h3>
       <p style="font-size:.85rem;color:#666;margin-bottom:12px;">
         Select a card from the pool, then click a clover slot to place it.
         Use ⇄ flip to swap which word faces which hint.
@@ -660,7 +670,7 @@ function renderScoring(state) {
 
   document.getElementById('mainArea').innerHTML = `
     <div class="section-box">
-      <h3>Results for ${g.owner_name}'s Clover 🍀</h3>
+      <h3>Results for ${escapeHtml(g.owner_name)}'s Clover 🍀</h3>
 
       <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:24px;">
         <!-- correct arrangement mini board -->
@@ -697,7 +707,7 @@ function renderScoring(state) {
       <div style="font-size:.85rem;color:#888;margin-bottom:8px;font-weight:600;">PLAYER SCORES</div>
       ${sc.all_guesses.map(g=>` 
         <div class="score-row">
-          <div style="font-weight:600;flex:1">${g.guesser_name}${g.guesser_id===MY_ID?' (you)':''}</div>
+          <div style="font-weight:600;flex:1">${escapeHtml(g.guesser_name)}${g.guesser_id===MY_ID?' (you)':''}</div>
           <div class="score-pip">${pips(g.score)}</div>
           <div style="font-weight:800;font-size:1.1rem;color:var(--green);min-width:40px;text-align:right">${g.score}/4</div>
         </div>
@@ -737,7 +747,7 @@ function renderFinished(state) {
         ${scores.map((p,i)=>`
           <div class="sb-row" style="${p.id===MY_ID?'font-weight:700':''}">
             <div class="sb-rank">${medals[i]||'  '}</div>
-            <div class="sb-name">${p.name}${p.id===MY_ID?' (you)':''}</div>
+            <div class="sb-name">${escapeHtml(p.name)}${p.id===MY_ID?' (you)':''}</div>
             <div class="sb-score">${p.score}</div>
           </div>
         `).join('')}

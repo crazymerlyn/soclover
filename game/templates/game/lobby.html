@@ -94,6 +94,15 @@ const ROOM_CODE = "{{ room.code }}";
 const MY_ID     = {{ player.id }};
 const IS_HOST   = {{ player.is_host|yesno:"true,false" }};
 
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+}
+
 async function copyCode() {
   const btn = document.querySelector('.share-box .btn');
   try {
@@ -139,14 +148,18 @@ async function startGame() {
 
 function renderPlayers(players) {
   document.getElementById('playerCount').textContent = players.length;
-  document.getElementById('playerItems').innerHTML = players.map(p => `
-    <div class="player-item">
-      <div class="player-avatar">${(p.name||'?')[0].toUpperCase()}</div>
-      <span class="player-name">${p.name||'Unknown'}</span>
-      ${p.is_host ? '<span class="badge">HOST</span>' : ''}
-      ${p.id === MY_ID ? '<span class="badge you">YOU</span>' : ''}
-    </div>
-  `).join('');
+  document.getElementById('playerItems').innerHTML = players.map(p => {
+    const escapedName = escapeHtml(p.name || 'Unknown');
+    const avatarLetter = escapeHtml((p.name || '?')[0].toUpperCase());
+    return `
+      <div class="player-item">
+        <div class="player-avatar">${avatarLetter}</div>
+        <span class="player-name">${escapedName}</span>
+        ${p.is_host ? '<span class="badge">HOST</span>' : ''}
+        ${p.id === MY_ID ? '<span class="badge you">YOU</span>' : ''}
+      </div>
+    `;
+  }).join('');
 
   if (IS_HOST) {
     const btn = document.getElementById('startBtn');
