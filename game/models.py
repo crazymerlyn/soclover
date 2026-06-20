@@ -5,8 +5,10 @@ from django.db import models
 
 MAX_PLAYERS = 8
 
+_SAFE_CHARS = "ABCDEFGHJKLMNPRTUVWXYZ"  # no I, O, Q, S (avoid ambiguity)
+
 def generate_room_code():
-    return ''.join(random.choices(string.ascii_uppercase, k=6))
+    return ''.join(random.choices(_SAFE_CHARS, k=6))
 
 
 def create_room_with_retry(max_attempts=10):

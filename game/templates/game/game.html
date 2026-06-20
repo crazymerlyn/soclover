@@ -247,7 +247,7 @@ function pips(score, total=4) {
 }
 
 // ─────────── sidebar ───────────────────────────────────────────────────────
-function renderSidebar(players, status, extra) {
+function renderSidebar(players, status) {
   const list = document.getElementById('playerList');
   list.innerHTML = players.map(p => {
     const isMe = p.id === MY_ID;

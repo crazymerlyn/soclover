@@ -1,8 +1,6 @@
 import json
 import random
 
-from collections import defaultdict
-
 from django.db import transaction
 from django.shortcuts import render, redirect
 from django.http import JsonResponse, Http404
@@ -142,7 +140,7 @@ def home(request):
                     )
                     return redirect("lobby", code=room.code)
 
-    return render(request, "game/home.html", {"error": error})
+    return render(request, "game/home.html", {"error": error, "max_players": MAX_PLAYERS})
 
 
 def lobby(request, code):
@@ -346,32 +344,34 @@ def submit_clues(request, code):
                 status=400,
             )
 
-    clover = player.clover
-    clover.data["clues"] = clues
+    with transaction.atomic():
+        room = Room.objects.select_for_update().get(id=room.id)
+        clover = player.clover
+        clover.data["clues"] = clues
 
-    # Build shuffled card list (4 real + 2 red herrings)
-    arrangement = clover.data["arrangement"]
-    used_indices = {arrangement[p]["card_idx"] for p in ("n", "e", "s", "w")}
-    real_cards = [
-        {"idx": arrangement[p]["card_idx"], "words": arrangement[p]["words"]}
-        for p in ("n", "e", "s", "w")
-    ]
-    available = [i for i in range(len(WORD_CARDS)) if i not in used_indices]
-    herrings = random.sample(available, 2)
-    for hi in herrings:
-        real_cards.append({"idx": hi, "words": list(WORD_CARDS[hi])})
-    random.shuffle(real_cards)
-    clover.data["cards"] = real_cards
-    clover.clues_submitted = True
-    clover.save()
+        # Build shuffled card list (4 real + 2 red herrings)
+        arrangement = clover.data["arrangement"]
+        used_indices = {arrangement[p]["card_idx"] for p in ("n", "e", "s", "w")}
+        real_cards = [
+            {"idx": arrangement[p]["card_idx"], "words": arrangement[p]["words"]}
+            for p in ("n", "e", "s", "w")
+        ]
+        available = [i for i in range(len(WORD_CARDS)) if i not in used_indices]
+        herrings = random.sample(available, 2)
+        for hi in herrings:
+            real_cards.append({"idx": hi, "words": list(WORD_CARDS[hi])})
+        random.shuffle(real_cards)
+        clover.data["cards"] = real_cards
+        clover.clues_submitted = True
+        clover.save()
 
-    # Auto-advance once every player has submitted
-    total = room.players.count()
-    done = Clover.objects.filter(player__room=room, clues_submitted=True).count()
-    if done >= total:
-        room.status = Room.STATUS_GUESSING
-        room.current_clover_index = 0
-        room.save()
+        # Auto-advance once every player has submitted
+        total = room.players.count()
+        done = Clover.objects.filter(player__room=room, clues_submitted=True).count()
+        if done >= total:
+            room.status = Room.STATUS_GUESSING
+            room.current_clover_index = 0
+            room.save(update_fields=["status", "current_clover_index"])
 
     return JsonResponse({"success": True})
 
