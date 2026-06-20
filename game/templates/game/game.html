@@ -422,6 +422,10 @@ function renderGuessing(state) {
   if (!placedDirty) {
     if (g.my_guess?.arrangement) {
       placed = JSON.parse(JSON.stringify(g.my_guess.arrangement));
+      // Ensure all positions have flipped key (server may not store it)
+      for (const pos of ['n','e','s','w']) {
+        if (placed[pos]) placed[pos].flipped = placed[pos].flipped || false;
+      }
     } else {
       placed = {n:null,e:null,s:null,w:null};
     }

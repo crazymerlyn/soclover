@@ -355,6 +355,7 @@ def submit_clues(request, code):
 
     with transaction.atomic():
         room = Room.objects.select_for_update().get(id=room.id)
+        player = Player.objects.get(id=player.id)
         clover = player.clover
         clover.data["clues"] = clues
 
@@ -414,10 +415,15 @@ def submit_guess(request, code):
     clover = owner.clover
     guess_arr = body.get("arrangement", {})
 
-    # Validate arrangement structure
+    # Validate arrangement structure and card indices
     valid_positions = {"n", "e", "s", "w"}
-    if not all(p in guess_arr and isinstance(guess_arr[p], dict) and "idx" in guess_arr[p] for p in valid_positions):
-        return JsonResponse({"error": "Invalid arrangement data."}, status=400)
+    max_idx = len(WORD_CARDS) - 1
+    for p in valid_positions:
+        entry = guess_arr.get(p)
+        if not isinstance(entry, dict) or not isinstance(entry.get("idx"), int):
+            return JsonResponse({"error": "Invalid arrangement data."}, status=400)
+        if not (0 <= entry["idx"] <= max_idx):
+            return JsonResponse({"error": "Invalid card index."}, status=400)
 
     # Score: 1 point per position with correct card_idx
     correct_arr = clover.data["arrangement"]
