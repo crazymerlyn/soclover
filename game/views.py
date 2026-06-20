@@ -1,6 +1,8 @@
 import json
 import random
 
+from collections import defaultdict
+
 from django.db import transaction
 from django.shortcuts import render, redirect
 from django.http import JsonResponse, Http404
@@ -65,6 +67,12 @@ def get_edge_words(arrangement):
 def players_list(room, include_submitted=False, include_guess_submitted=None):
     qs = room.players.select_related("clover").order_by("order")
     out = []
+    guess_map = {}
+    if include_guess_submitted is not None:
+        guesses = Guess.objects.filter(
+            guesser__room=room, clover=include_guess_submitted
+        ).values_list("guesser_id", "submitted")
+        guess_map = {g[0]: g[1] for g in guesses}
     for p in qs:
         d = {
             "id": p.id,
@@ -78,8 +86,7 @@ def players_list(room, include_submitted=False, include_guess_submitted=None):
             except AttributeError:
                 d["clues_submitted"] = False
         if include_guess_submitted is not None:
-            g = Guess.objects.filter(guesser=p, clover=include_guess_submitted).first()
-            d["guess_submitted"] = g.submitted if g else False
+            d["guess_submitted"] = guess_map.get(p.id, False)
         out.append(d)
     return out
 
@@ -236,14 +243,16 @@ def get_state(request, code):
     if room.status == Room.STATUS_WRITING:
         state["players"] = players_list(room, include_submitted=True)
 
-        clover = getattr(player, "clover", None)
-        if clover:
+        try:
+            clover = player.clover
             edges = get_edge_words(clover.data["arrangement"])
             state["writing"] = {
                 "edges": edges,
                 "clues": clover.data.get("clues", {}),
                 "submitted": clover.clues_submitted,
             }
+        except AttributeError:
+            state["writing"] = {"error": "Clover not yet assigned."}
 
     # ── Guessing / Scoring phase ────────────────────────────────────────────
     elif room.status in (Room.STATUS_GUESSING, Room.STATUS_SCORING):

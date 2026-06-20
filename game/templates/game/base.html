@@ -115,6 +115,7 @@
 <main>
   {% block content %}{% endblock %}
 </main>
+<script>const CSRF_TOKEN = "{{ csrf_token }}";</script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

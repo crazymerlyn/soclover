@@ -226,17 +226,11 @@ let selectedCardIdx = null;  // for click-to-place
 let placedDirty = false;  // track if user has manually modified cards
 
 // ─────────── helpers ───────────────────────────────────────────────────────
-function csrfToken() {
-  let m = document.cookie.match('(^|;) ?csrftoken=([^;]*)(;|$)');
-  if (m) return m[2];
-  let el = document.querySelector('[name=csrfmiddlewaretoken]');
-  return el ? el.value : '';
-}
 async function apiPost(path, body) {
   try {
     const r = await fetch(path, {
       method:'POST',
-      headers:{'Content-Type':'application/json','X-CSRFToken':csrfToken()},
+      headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},
       body: JSON.stringify(body)
     });
     const ct = r.headers.get('content-type') || '';

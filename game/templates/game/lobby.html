@@ -95,9 +95,21 @@ const MY_ID     = {{ player.id }};
 const IS_HOST   = {{ player.is_host|yesno:"true,false" }};
 
 async function copyCode() {
-  await navigator.clipboard.writeText(ROOM_CODE).catch(()=>{});
   const btn = document.querySelector('.share-box .btn');
-  btn.textContent = '✅ Copied!';
+  try {
+    await navigator.clipboard.writeText(ROOM_CODE);
+    btn.textContent = '✅ Copied!';
+  } catch {
+    // Fallback: select and copy manually
+    const ta = document.createElement('textarea');
+    ta.value = ROOM_CODE;
+    ta.style.position = 'fixed'; ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    btn.textContent = '✅ Copied!';
+  }
   setTimeout(()=>btn.textContent='📋 Copy', 2000);
 }
 
@@ -107,7 +119,7 @@ async function startGame() {
   btn.textContent = 'Starting…';
   const r = await fetch(`/api/${ROOM_CODE}/start/`, {
     method:'POST',
-    headers:{'X-CSRFToken': getCookie('csrftoken')}
+    headers:{'X-CSRFToken': CSRF_TOKEN}
   });
   const d = await r.json();
   if (d.success) {
@@ -117,11 +129,6 @@ async function startGame() {
     btn.disabled = false;
     btn.textContent = 'Start Game';
   }
-}
-
-function getCookie(name) {
-  let v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
-  return v ? v[2] : null;
 }
 
 function renderPlayers(players) {
