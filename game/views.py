@@ -227,13 +227,14 @@ def get_state(request, code):
     state = {
         "status": room.status,
         "room_code": room.code,
+        "players": players_list(room),
+        "my_player_id": player.id,
+        "is_host": player.is_host,
     }
 
     # ── Writing phase ───────────────────────────────────────────────────────
     if room.status == Room.STATUS_WRITING:
         state["players"] = players_list(room, include_submitted=True)
-        state["my_player_id"] = player.id
-        state["is_host"] = player.is_host
 
         clover = getattr(player, "clover", None)
         if clover:
@@ -268,8 +269,6 @@ def get_state(request, code):
         state["players"] = players_list(
             room, include_guess_submitted=clover
         )
-        state["my_player_id"] = player.id
-        state["is_host"] = player.is_host
         state["guessing"] = {
             "owner_name": owner.name,
             "owner_id": owner.id,
@@ -307,9 +306,6 @@ def get_state(request, code):
 
     # ── Finished ────────────────────────────────────────────────────────────
     elif room.status == Room.STATUS_FINISHED:
-        state["players"] = players_list(room)
-        state["my_player_id"] = player.id
-        state["is_host"] = player.is_host
         state["final_scores"] = [
             {"name": p.name, "score": p.score} for p in room.players.order_by("-score")
         ]
