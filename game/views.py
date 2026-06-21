@@ -8,6 +8,7 @@ from django.urls import reverse
 from django.http import JsonResponse, Http404
 from django.views.decorators.http import require_POST, require_GET
 from django.utils import timezone
+from django.db.models import Max
 
 from .models import MAX_PLAYERS, HOST_TIMEOUT_SECONDS, Room, Player, Clover, Guess, create_room_with_retry
 from .words import WORD_CARDS
@@ -109,8 +110,8 @@ def home(request):
             if action == "create":
                 try:
                     room = create_room_with_retry()
-                except RuntimeError as e:
-                    return render(request, "game/home.html", {"error": str(e)})
+                except RuntimeError:
+                    return render(request, "game/home.html", {"error": "Could not create room. Please try again."})
                 Player.objects.create(
                     room=room,
                     name=player_name,
@@ -137,13 +138,17 @@ def home(request):
                         # Upsert player for this session with proper ordering
                         with transaction.atomic():
                             locked_room = Room.objects.select_for_update().get(id=room.id)
+                            # Use Max aggregate to get safe order value
+                            max_order = locked_room.players.aggregate(
+                                max_order=Max('order')
+                            )['max_order'] or 0
                             player, created = Player.objects.get_or_create(
                                 room=locked_room,
                                 session_key=sk,
                                 defaults={
                                     "name": player_name,
                                     "is_host": False,
-                                    "order": locked_room.players.count(),
+                                    "order": max_order + 1,
                                 },
                             )
                         return redirect("lobby", code=room.code)
@@ -323,7 +328,7 @@ def get_state(request, code):
         try:
             clover = owner.clover
         except AttributeError:
-            return JsonResponse({"error": "Clover not found for owner."}, status=500)
+            return JsonResponse({"error": "Game state error."}, status=500)
         is_owner = player.id == owner.id
 
         submitted_count = Guess.objects.filter(clover=clover, submitted=True).count()
@@ -442,6 +447,8 @@ def submit_clues(request, code):
             for p in ("n", "e", "s", "w")
         ]
         available = [i for i in range(len(WORD_CARDS)) if i not in used_indices]
+        if len(available) < 2:
+            return JsonResponse({"error": "Not enough word cards available."}, status=500)
         herrings = random.sample(available, 2)
         for hi in herrings:
             real_cards.append({"idx": hi, "words": list(WORD_CARDS[hi])})
@@ -553,15 +560,13 @@ def next_clover(request, code):
         room = get_room_or_json404(code)
     except Http404:
         return JsonResponse({"error": "Room not found."}, status=404)
-    player = get_player(request, room)
-
-    if not player or not player.is_host:
-        return JsonResponse({"error": "Only the host can advance."}, status=403)
-    if room.status != Room.STATUS_SCORING:
-        return JsonResponse({"error": "Not in scoring phase."}, status=400)
 
     with transaction.atomic():
         room = Room.objects.select_for_update().get(id=room.id)
+        player = get_player(request, room)
+
+        if not player or not player.is_host:
+            return JsonResponse({"error": "Only the host can advance."}, status=403)
         if room.status != Room.STATUS_SCORING:
             return JsonResponse({"error": "Not in scoring phase."}, status=400)
 
