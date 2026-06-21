@@ -9,7 +9,7 @@ from django.http import JsonResponse, Http404
 from django.views.decorators.http import require_POST, require_GET
 from django.utils import timezone
 
-from .models import MAX_PLAYERS, Room, Player, Clover, Guess, create_room_with_retry
+from .models import MAX_PLAYERS, HOST_TIMEOUT_SECONDS, Room, Player, Clover, Guess, create_room_with_retry
 from .words import WORD_CARDS
 
 

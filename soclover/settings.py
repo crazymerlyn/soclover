@@ -9,7 +9,14 @@ if not SECRET_KEY:
         raise ValueError("DJANGO_SECRET_KEY environment variable is required in production")
     SECRET_KEY = 'django-insecure-soclover-dev-key-change-in-production'
 
-DEBUG = os.environ.get('DJANGO_DEBUG', 'False') == 'True'
+DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
+
+if DEBUG:
+    import warnings
+    warnings.warn(
+        "DJANGO_DEBUG is True. Set DJANGO_DEBUG=False in production!",
+        stacklevel=2,
+    )
 
 ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
@@ -68,6 +75,14 @@ else:
     SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 SESSION_COOKIE_AGE = 86400  # 24 hours
 
+# Security headers that should always be enabled
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = False  # Needed for AJAX CSRF
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
+X_FRAME_OPTIONS = 'DENY'
+
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
@@ -76,13 +91,6 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-
-# Security headers that should always be enabled
-SECURE_CONTENT_TYPE_NOSNIFF = True
-SESSION_COOKIE_HTTPONLY = True
-CSRF_COOKIE_HTTPONLY = False  # Needed for AJAX CSRF
-SESSION_COOKIE_SAMESITE = 'Lax'
-CSRF_COOKIE_SAMESITE = 'Lax'
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
