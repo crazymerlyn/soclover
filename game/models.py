@@ -32,12 +32,27 @@ class Room(models.Model):
     STATUS_GUESSING = 'guessing'
     STATUS_SCORING  = 'scoring'
     STATUS_FINISHED = 'finished'
+    
+    STATUS_CHOICES = [
+        (STATUS_LOBBY, 'Lobby'),
+        (STATUS_WRITING, 'Writing'),
+        (STATUS_GUESSING, 'Guessing'),
+        (STATUS_SCORING, 'Scoring'),
+        (STATUS_FINISHED, 'Finished'),
+    ]
 
     code = models.CharField(max_length=6, unique=True, default=generate_room_code)
-    status = models.CharField(max_length=20, default=STATUS_LOBBY)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_LOBBY)
     # Index into players.order_by('order') — whose clover is currently being guessed
     current_clover_index = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        ordered_players = list(self.players.order_by('order'))
+        if self.current_clover_index < 0 or self.current_clover_index >= len(ordered_players):
+            if ordered_players:  # Only validate if there are players
+                raise ValidationError('current_clover_index is out of range')
 
     def __str__(self):
         return f"Room {self.code} ({self.status})"
