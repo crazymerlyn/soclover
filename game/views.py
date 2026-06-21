@@ -282,15 +282,16 @@ def get_state(request, code):
     state = {
         "status": room.status,
         "room_code": room.code,
-        "players": players_list(room),
         "my_player_id": player.id,
         "is_host": player.is_host,
     }
 
+    include_submitted = False
+    include_guess_submitted = None
+
     # ── Writing phase ───────────────────────────────────────────────────────
     if room.status == Room.STATUS_WRITING:
-        state["players"] = players_list(room, include_submitted=True)
-
+        include_submitted = True
         try:
             clover = player.clover
             edges = get_edge_words(clover.data["arrangement"])
@@ -306,6 +307,11 @@ def get_state(request, code):
     elif room.status in (Room.STATUS_GUESSING, Room.STATUS_SCORING):
         ordered = list(room.players.order_by("order"))
         idx = room.current_clover_index
+        if idx >= len(ordered):
+            idx = 0
+            room.current_clover_index = 0
+            room.save(update_fields=["current_clover_index"])
+
         owner = ordered[idx]
         try:
             clover = owner.clover
@@ -314,7 +320,7 @@ def get_state(request, code):
         is_owner = player.id == owner.id
 
         submitted_count = Guess.objects.filter(clover=clover, submitted=True).count()
-        total_guessers = room.players.count() - 1
+        total_guessers = len(ordered) - 1
 
         my_guess_data = None
         if not is_owner:
@@ -326,9 +332,7 @@ def get_state(request, code):
                     "score": g.score,
                 }
 
-        state["players"] = players_list(
-            room, include_guess_submitted=clover
-        )
+        include_guess_submitted = clover
         state["guessing"] = {
             "owner_name": owner.name,
             "owner_id": owner.id,
@@ -370,6 +374,13 @@ def get_state(request, code):
             {"id": p.id, "name": p.name, "score": p.score}
             for p in room.players.order_by("-score")
         ]
+
+    # Finally, query the players list exactly once
+    state["players"] = players_list(
+        room,
+        include_submitted=include_submitted,
+        include_guess_submitted=include_guess_submitted,
+    )
 
     return JsonResponse(state)
 
