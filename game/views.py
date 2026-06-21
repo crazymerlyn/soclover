@@ -262,23 +262,27 @@ def get_state(request, code):
                     next_host.save(update_fields=['is_host'])
                     if player.id == next_host.id:
                         player.is_host = True
-    elif timezone.now() - host.last_active > datetime.timedelta(seconds=15):
+    else:
+        # Re-fetch host inside transaction to get fresh last_active
         with transaction.atomic():
             locked_host = Player.objects.select_for_update().filter(room=room, is_host=True).first()
-            if locked_host and timezone.now() - locked_host.last_active > datetime.timedelta(seconds=15):
+            if locked_host and timezone.now() - locked_host.last_active > datetime.timedelta(seconds=HOST_TIMEOUT_SECONDS):
                 next_host = Player.objects.select_for_update().filter(
                     room=room,
-                    last_active__gt=timezone.now() - datetime.timedelta(seconds=15)
+                    last_active__gt=timezone.now() - datetime.timedelta(seconds=HOST_TIMEOUT_SECONDS)
                 ).exclude(id=locked_host.id).order_by('order').first()
                 if next_host:
                     locked_host.is_host = False
                     locked_host.save(update_fields=['is_host'])
                     next_host.is_host = True
                     next_host.save(update_fields=['is_host'])
+                    # Refresh player's is_host status from database
                     if player.id == locked_host.id:
                         player.is_host = False
                     elif player.id == next_host.id:
                         player.is_host = True
+                    # Re-fetch player to ensure consistency
+                    player.refresh_from_db()
 
     state = {
         "status": room.status,
@@ -295,12 +299,16 @@ def get_state(request, code):
         include_submitted = True
         try:
             clover = player.clover
-            edges = get_edge_words(clover.data["arrangement"])
-            state["writing"] = {
-                "edges": edges,
-                "clues": clover.data.get("clues", {}),
-                "submitted": clover.clues_submitted,
-            }
+            arrangement = clover.data.get("arrangement")
+            if not arrangement:
+                state["writing"] = {"error": "Clover not yet assigned."}
+            else:
+                edges = get_edge_words(arrangement)
+                state["writing"] = {
+                    "edges": edges,
+                    "clues": clover.data.get("clues", {}),
+                    "submitted": clover.clues_submitted,
+                }
         except AttributeError:
             state["writing"] = {"error": "Clover not yet assigned."}
 
@@ -395,7 +403,11 @@ def submit_clues(request, code):
     if not player or room.status != Room.STATUS_WRITING:
         return JsonResponse({"error": "Invalid state."}, status=400)
 
-    body = json.loads(request.body)
+    try:
+        body = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "Invalid JSON."}, status=400)
+
     clues = {k: body.get(k, "").strip() for k in ("ne", "se", "sw", "nw")}
 
     if not all(clues.values()):
@@ -411,7 +423,15 @@ def submit_clues(request, code):
     with transaction.atomic():
         room = Room.objects.select_for_update().get(id=room.id)
         player = Player.objects.get(id=player.id)
-        clover = player.clover
+
+        # Check if clues already submitted
+        try:
+            clover = player.clover
+            if clover.clues_submitted:
+                return JsonResponse({"error": "Clues already submitted."}, status=400)
+        except AttributeError:
+            return JsonResponse({"error": "Clover not found."}, status=400)
+
         clover.data["clues"] = clues
 
         # Build shuffled card list (4 real + 2 red herrings)
@@ -452,7 +472,11 @@ def submit_guess(request, code):
     if not player or room.status not in (Room.STATUS_GUESSING, Room.STATUS_SCORING):
         return JsonResponse({"error": "Invalid state."}, status=400)
 
-    body = json.loads(request.body)
+    try:
+        body = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "Invalid JSON."}, status=400)
+
     guess_arr = body.get("arrangement", {})
     client_clover_idx = body.get("clover_index")
 
@@ -603,10 +627,24 @@ def kick_player(request, code, player_id):
 
         elif room.status in (Room.STATUS_GUESSING, Room.STATUS_SCORING):
             if room.current_clover_index == kicked_idx:
-                room.status = Room.STATUS_GUESSING
+                # Current clover owner was kicked - need to handle gracefully
+                # Delete all guesses for this clover
+                try:
+                    current_owner = ordered_players[kicked_idx]
+                    current_clover = current_owner.clover
+                    Guess.objects.filter(clover=current_clover).delete()
+                    current_clover.delete()
+                except (AttributeError, Clover.DoesNotExist):
+                    pass
+                
+                # Adjust index and check if we should finish
                 if room.current_clover_index >= len(remaining_players):
                     room.status = Room.STATUS_FINISHED
-                room.save(update_fields=["status", "current_clover_index"])
+                    room.save(update_fields=["status"])
+                    return JsonResponse({"success": True})
+                else:
+                    room.status = Room.STATUS_GUESSING
+                    room.save(update_fields=["status", "current_clover_index"])
             elif room.current_clover_index > kicked_idx:
                 room.current_clover_index = max(0, room.current_clover_index - 1)
                 room.save(update_fields=["current_clover_index"])
