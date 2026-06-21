@@ -151,12 +151,15 @@ function renderPlayers(players) {
   document.getElementById('playerItems').innerHTML = players.map(p => {
     const escapedName = escapeHtml(p.name || 'Unknown');
     const avatarLetter = escapeHtml((p.name || '?')[0].toUpperCase());
+    const isMe = p.id === MY_ID;
+    const canKick = IS_HOST && !isMe;
     return `
       <div class="player-item">
         <div class="player-avatar">${avatarLetter}</div>
         <span class="player-name">${escapedName}</span>
         ${p.is_host ? '<span class="badge">HOST</span>' : ''}
         ${p.id === MY_ID ? '<span class="badge you">YOU</span>' : ''}
+        ${canKick ? `<button onclick="kickPlayer(${p.id}, '${escapedName}')" style="margin-left:auto; background:none; border:none; color:var(--red); font-weight:bold; cursor:pointer; font-size:1.1rem; padding: 2px 6px;">✕</button>` : ''}
       </div>
     `;
   }).join('');
@@ -164,6 +167,21 @@ function renderPlayers(players) {
   if (IS_HOST) {
     const btn = document.getElementById('startBtn');
     btn.disabled = players.length < 2;
+  }
+}
+
+async function kickPlayer(id, name) {
+  if (!confirm(`Are you sure you want to kick ${name}?`)) return;
+  try {
+    const r = await fetch(`/api/${ROOM_CODE}/kick/${id}/`, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': CSRF_TOKEN }
+    });
+    const d = await r.json();
+    if (d.success) poll();
+    else alert(d.error || 'Could not kick player');
+  } catch {
+    alert('Error kicking player');
   }
 }
 

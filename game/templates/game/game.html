@@ -269,15 +269,32 @@ function renderSidebar(players, status) {
     }
     const dotClass = (p.clues_submitted || p.guess_submitted) ? 'done' : '';
     const escapedName = escapeHtml(p.name);
+    const canKick = IS_HOST && !isMe;
     return `
       <div class="sp-item">
         <div class="sp-dot ${dotClass}"></div>
         <span style="flex:1;${isMe?'font-weight:700':''}">${escapedName}${isMe?' (you)':''}</span>
-        <span class="sp-score">${p.score}</span>
-        ${indicator ? `<span style="font-size:.8rem">${indicator}</span>` : ''}
+        <span class="sp-score" style="margin-right: 6px;">${p.score}</span>
+        ${indicator ? `<span style="font-size:.8rem; margin-right: 6px;">${indicator}</span>` : ''}
+        ${canKick ? `<button onclick="kickPlayer(${p.id}, '${escapedName}')" style="background:none; border:none; color:var(--red); font-weight:bold; cursor:pointer; font-size:1rem; padding: 2px 4px; line-height: 1;">✕</button>` : ''}
       </div>
     `;
   }).join('');
+}
+
+async function kickPlayer(id, name) {
+  if (!confirm(`Are you sure you want to kick ${name}?`)) return;
+  try {
+    const r = await fetch(`/api/${ROOM_CODE}/kick/${id}/`, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': CSRF_TOKEN }
+    });
+    const d = await r.json();
+    if (d.success) poll();
+    else alert(d.error || 'Could not kick player');
+  } catch {
+    alert('Error kicking player');
+  }
 }
 
 // ─────────── Writing phase ──────────────────────────────────────────────────

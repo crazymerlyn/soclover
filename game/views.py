@@ -540,3 +540,79 @@ def next_clover(request, code):
         room.save()
 
     return JsonResponse({"success": True})
+
+
+@require_POST
+def kick_player(request, code, player_id):
+    try:
+        room = get_room_or_json404(code)
+    except Http404:
+        return JsonResponse({"error": "Room not found."}, status=404)
+
+    requester = get_player(request, room)
+    if not requester or not requester.is_host:
+        return JsonResponse({"error": "Only the host can kick players."}, status=403)
+
+    try:
+        player_to_kick = room.players.get(id=player_id)
+    except Player.DoesNotExist:
+        return JsonResponse({"error": "Player not found in this room."}, status=404)
+
+    if player_to_kick.is_host:
+        return JsonResponse({"error": "Host cannot be kicked."}, status=400)
+
+    with transaction.atomic():
+        room = Room.objects.select_for_update().get(id=room.id)
+        ordered_players = list(room.players.order_by("order"))
+
+        try:
+            kicked_idx = ordered_players.index(player_to_kick)
+        except ValueError:
+            return JsonResponse({"error": "Player not found."}, status=404)
+
+        player_to_kick.delete()
+
+        remaining_players = list(room.players.order_by("order"))
+
+        if len(remaining_players) < 2 and room.status != Room.STATUS_LOBBY:
+            room.status = Room.STATUS_FINISHED
+            room.save(update_fields=["status"])
+            return JsonResponse({"success": True})
+
+        for i, p in enumerate(remaining_players):
+            p.order = i
+            p.save(update_fields=["order"])
+
+        if room.status == Room.STATUS_WRITING:
+            total = len(remaining_players)
+            done = Clover.objects.filter(player__room=room, clues_submitted=True).count()
+            if done >= total:
+                room.status = Room.STATUS_GUESSING
+                room.current_clover_index = 0
+                room.save(update_fields=["status", "current_clover_index"])
+
+        elif room.status in (Room.STATUS_GUESSING, Room.STATUS_SCORING):
+            if room.current_clover_index == kicked_idx:
+                room.status = Room.STATUS_GUESSING
+                if room.current_clover_index >= len(remaining_players):
+                    room.status = Room.STATUS_FINISHED
+                room.save(update_fields=["status", "current_clover_index"])
+            elif room.current_clover_index > kicked_idx:
+                room.current_clover_index = max(0, room.current_clover_index - 1)
+                room.save(update_fields=["current_clover_index"])
+
+            if room.status in (Room.STATUS_GUESSING, Room.STATUS_SCORING):
+                current_owner = remaining_players[room.current_clover_index]
+                clover = current_owner.clover
+                submitted = Guess.objects.filter(clover=clover, submitted=True).count()
+                total_g = len(remaining_players) - 1
+
+                if submitted >= total_g:
+                    room.status = Room.STATUS_SCORING
+                    room.save(update_fields=["status"])
+                else:
+                    if room.status == Room.STATUS_SCORING:
+                        room.status = Room.STATUS_GUESSING
+                        room.save(update_fields=["status"])
+
+    return JsonResponse({"success": True})
