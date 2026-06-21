@@ -343,7 +343,7 @@ function renderCloVer_writing(edges, clues, disabled) {
        <div class="hint-words">${placeholder.split('|')[0]}<br>${placeholder.split('|')[1]}</div>
        <input id="${id}" type="text" maxlength="25"
               placeholder="your clue…"
-              value="${val||''}"
+              value="${escapeHtml(val)}"
               ${disabled?'disabled':''}>
      </div>`;
 
@@ -471,7 +471,7 @@ function renderOwnerView(g, state) {
         ${Object.entries(g.clues).map(([k,v])=>`
           <div>
             <div style="font-size:.7rem;color:#888;text-transform:uppercase;">${k.toUpperCase()}</div>
-            <div class="hint-chip">${v}</div>
+            <div class="hint-chip">${escapeHtml(v)}</div>
           </div>
         `).join('')}
       </div>
