@@ -1,22 +1,28 @@
-import random
+import secrets
 import string
-from django.db import models
+from django.db import models, IntegrityError
 from django.utils import timezone
 
 
 MAX_PLAYERS = 8
+ROOM_CODE_LENGTH = 6
+HOST_TIMEOUT_SECONDS = 15
+RED_HERRING_COUNT = 2
 
 _SAFE_CHARS = "ABCDEFGHJKLMNPRTUVWXYZ"  # no I, O, Q, S (avoid ambiguity)
 
 def generate_room_code():
-    return ''.join(random.choices(_SAFE_CHARS, k=6))
+    return ''.join(secrets.choice(_SAFE_CHARS) for _ in range(ROOM_CODE_LENGTH))
 
 
 def create_room_with_retry(max_attempts=10):
     for _ in range(max_attempts):
         code = generate_room_code()
-        if not Room.objects.filter(code=code).exists():
-            return code
+        try:
+            room = Room.objects.create(code=code)
+            return room
+        except IntegrityError:
+            continue
     raise RuntimeError("Could not generate unique room code")
 
 

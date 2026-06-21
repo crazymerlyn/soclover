@@ -108,10 +108,9 @@ def home(request):
 
             if action == "create":
                 try:
-                    code = create_room_with_retry()
+                    room = create_room_with_retry()
                 except RuntimeError as e:
                     return render(request, "game/home.html", {"error": str(e)})
-                room = Room.objects.create(code=code)
                 Player.objects.create(
                     room=room,
                     name=player_name,
@@ -135,16 +134,18 @@ def home(request):
                     if room.players.filter(name__iexact=player_name).exclude(session_key=sk).exists():
                         error = "That name is already taken in this room. Please choose another name."
                     else:
-                        # Upsert player for this session
-                        player, _ = Player.objects.get_or_create(
-                            room=room,
-                            session_key=sk,
-                            defaults={
-                                "name": player_name,
-                                "is_host": False,
-                                "order": room.players.count(),
-                            },
-                        )
+                        # Upsert player for this session with proper ordering
+                        with transaction.atomic():
+                            locked_room = Room.objects.select_for_update().get(id=room.id)
+                            player, created = Player.objects.get_or_create(
+                                room=locked_room,
+                                session_key=sk,
+                                defaults={
+                                    "name": player_name,
+                                    "is_host": False,
+                                    "order": locked_room.players.count(),
+                                },
+                            )
                         return redirect("lobby", code=room.code)
 
     code_preset = request.GET.get("code", "").strip().upper()
@@ -309,8 +310,6 @@ def get_state(request, code):
         idx = room.current_clover_index
         if idx >= len(ordered):
             idx = 0
-            room.current_clover_index = 0
-            room.save(update_fields=["current_clover_index"])
 
         owner = ordered[idx]
         try:
