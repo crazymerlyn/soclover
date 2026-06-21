@@ -3,11 +3,15 @@ import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-soclover-dev-key-change-in-production')
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
+if not SECRET_KEY:
+    if os.environ.get('VERCEL'):
+        raise ValueError("DJANGO_SECRET_KEY environment variable is required in production")
+    SECRET_KEY = 'django-insecure-soclover-dev-key-change-in-production'
 
-DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
+DEBUG = os.environ.get('DJANGO_DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', '*').split(',')
+ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -58,7 +62,10 @@ DATABASES = {
 if DATABASES['default']['ENGINE'].endswith('sqlite3'):
     DATABASES['default'].setdefault('OPTIONS', {})['timeout'] = 20
 
-SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+if ON_VERCEL:
+    SESSION_ENGINE = 'django.contrib.sessions.backends.signed_cookies'
+else:
+    SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 SESSION_COOKIE_AGE = 86400  # 24 hours
 
 if not DEBUG:
@@ -69,6 +76,13 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# Security headers that should always be enabled
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = False  # Needed for AJAX CSRF
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
