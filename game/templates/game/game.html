@@ -229,6 +229,15 @@ function escapeHtml(str) {
             .replace(/'/g, "&#039;");
 }
 
+function escapeJs(str) {
+  if (!str) return '';
+  return str.replace(/\\/g, '\\\\')
+            .replace(/'/g, "\\'")
+            .replace(/"/g, '\\"')
+            .replace(/\n/g, '\\n')
+            .replace(/\r/g, '\\r');
+}
+
 let lastStatus  = null;
 let lastGuessing = null;  // JSON key to detect change
 let selectedCardIdx = null;  // for click-to-place
@@ -269,6 +278,7 @@ function renderSidebar(players, status) {
     }
     const dotClass = (p.clues_submitted || p.guess_submitted) ? 'done' : '';
     const escapedName = escapeHtml(p.name);
+    const jsEscapedName = escapeJs(p.name);
     const canKick = IS_HOST && !isMe;
     return `
       <div class="sp-item">
@@ -276,7 +286,7 @@ function renderSidebar(players, status) {
         <span style="flex:1;${isMe?'font-weight:700':''}">${escapedName}${isMe?' (you)':''}</span>
         <span class="sp-score" style="margin-right: 6px;">${p.score}</span>
         ${indicator ? `<span style="font-size:.8rem; margin-right: 6px;">${indicator}</span>` : ''}
-        ${canKick ? `<button onclick="kickPlayer(${p.id}, '${escapedName}')" style="background:none; border:none; color:var(--red); font-weight:bold; cursor:pointer; font-size:1rem; padding: 2px 4px; line-height: 1;">✕</button>` : ''}
+        ${canKick ? `<button onclick="kickPlayer(${p.id}, '${jsEscapedName}')" style="background:none; border:none; color:var(--red); font-weight:bold; cursor:pointer; font-size:1rem; padding: 2px 4px; line-height: 1;">✕</button>` : ''}
       </div>
     `;
   }).join('');
@@ -355,26 +365,26 @@ function renderCloVer_writing(edges, clues, disabled) {
       <div class="cg-cell">
         <div class="clover-slot has-card" style="cursor:default;">
           <div class="pos-label">N</div>
-          <div class="slot-word">${v('nw',1)}</div>
+          <div class="slot-word">${escapeHtml(v('nw',1))}</div>
           <div class="slot-divider"></div>
-          <div class="slot-word">${v('ne',0)}</div>
+          <div class="slot-word">${escapeHtml(v('ne',0))}</div>
         </div>
       </div>
       <div class="cg-cell"></div>
       <div class="cg-cell"></div>
       <!-- row 1 -->
       <div class="cg-cell"></div>
-      <div class="cg-cell">${inp('clue_nw','NW words:|'+v('nw',0)+' · '+v('nw',1), clues.nw)}</div>
+      <div class="cg-cell">${inp('clue_nw','NW words:|'+escapeHtml(v('nw',0))+' · '+escapeHtml(v('nw',1)), clues.nw)}</div>
       <div class="cg-cell"></div>
-      <div class="cg-cell">${inp('clue_ne','NE words:|'+v('ne',0)+' · '+v('ne',1), clues.ne)}</div>
+      <div class="cg-cell">${inp('clue_ne','NE words:|'+escapeHtml(v('ne',0))+' · '+escapeHtml(v('ne',1)), clues.ne)}</div>
       <div class="cg-cell"></div>
       <!-- row 2 -->
       <div class="cg-cell">
         <div class="clover-slot has-card" style="cursor:default;">
           <div class="pos-label">W</div>
-          <div class="slot-word">${v('nw',0)}</div>
+          <div class="slot-word">${escapeHtml(v('nw',0))}</div>
           <div class="slot-divider"></div>
-          <div class="slot-word">${v('sw',1)}</div>
+          <div class="slot-word">${escapeHtml(v('sw',1))}</div>
         </div>
       </div>
       <div class="cg-cell"></div>
@@ -383,16 +393,16 @@ function renderCloVer_writing(edges, clues, disabled) {
       <div class="cg-cell">
         <div class="clover-slot has-card" style="cursor:default;">
           <div class="pos-label">E</div>
-          <div class="slot-word">${v('ne',1)}</div>
+          <div class="slot-word">${escapeHtml(v('ne',1))}</div>
           <div class="slot-divider"></div>
-          <div class="slot-word">${v('se',0)}</div>
+          <div class="slot-word">${escapeHtml(v('se',0))}</div>
         </div>
       </div>
       <!-- row 3 -->
       <div class="cg-cell"></div>
-      <div class="cg-cell">${inp('clue_sw','SW words:|'+v('sw',0)+' · '+v('sw',1), clues.sw)}</div>
+      <div class="cg-cell">${inp('clue_sw','SW words:|'+escapeHtml(v('sw',0))+' · '+escapeHtml(v('sw',1)), clues.sw)}</div>
       <div class="cg-cell"></div>
-      <div class="cg-cell">${inp('clue_se','SE words:|'+v('se',0)+' · '+v('se',1), clues.se)}</div>
+      <div class="cg-cell">${inp('clue_se','SE words:|'+escapeHtml(v('se',0))+' · '+escapeHtml(v('se',1)), clues.se)}</div>
       <div class="cg-cell"></div>
       <!-- row 4 -->
       <div class="cg-cell"></div>
@@ -400,9 +410,9 @@ function renderCloVer_writing(edges, clues, disabled) {
       <div class="cg-cell">
         <div class="clover-slot has-card" style="cursor:default;">
           <div class="pos-label">S</div>
-          <div class="slot-word">${v('se',1)}</div>
+          <div class="slot-word">${escapeHtml(v('se',1))}</div>
           <div class="slot-divider"></div>
-          <div class="slot-word">${v('sw',0)}</div>
+          <div class="slot-word">${escapeHtml(v('sw',0))}</div>
         </div>
       </div>
       <div class="cg-cell"></div>
@@ -538,20 +548,20 @@ function renderGuesserBoard(g) {
     return `<div class="clover-slot has-card" id="slot-${pos}">
               <div class="pos-label">${pos.toUpperCase()}</div>
               <button class="remove-btn" onclick="removeCard('${pos}')">✕</button>
-              <div class="slot-word">${ws[0]}</div>
+              <div class="slot-word">${escapeHtml(ws[0])}</div>
               <div class="slot-divider"></div>
-              <div class="slot-word">${ws[1]}</div>
+              <div class="slot-word">${escapeHtml(ws[1])}</div>
               <button class="flip-btn" onclick="flipCard('${pos}')">⇄ flip</button>
             </div>`;
   }
 
-  function hintHTML(edge, clue, w) {
+function hintHTML(edge, clue, w) {
     const match = w[0]!=='?' && w[1]!=='?';
     return `<div class="hint-cell" style="${match?'':'opacity:.6'}">
-              <div class="clue-display">${clue}</div>
-              <div class="hint-words" style="font-size:.65rem">${w[0]} · ${w[1]}</div>
+              <div class="clue-display">${escapeHtml(clue)}</div>
+              <div class="hint-words" style="font-size:.65rem">${escapeHtml(w[0])} · ${escapeHtml(w[1])}</div>
             </div>`;
-  }
+}
 
   const allPlaced = Object.values(placed).every(Boolean);
 
@@ -570,9 +580,9 @@ function renderGuesserBoard(g) {
           return `<div class="word-card ${isPlaced?'placed':''} ${isSel&&!isPlaced?'selected':''}"
                        id="pool-card-${c.idx}"
                        onclick="${isPlaced?'':'selectCard('+c.idx+')'}" >
-                    <div class="w-top">${c.words[0]}</div>
+                    <div class="w-top">${escapeHtml(c.words[0])}</div>
                     <div class="w-divider"></div>
-                    <div class="w-bottom">${c.words[1]}</div>
+                    <div class="w-bottom">${escapeHtml(c.words[1])}</div>
                   </div>`;
         }).join('')}
       </div>
@@ -682,7 +692,7 @@ function renderScoring(state) {
   function miniCard(pos) {
     const c = arr[pos];
     const ws = c.flipped ? [c.words[1],c.words[0]] : c.words;
-    return `<div class="am-card">${ws[0]}<br><span style="color:#aaa">——</span><br>${ws[1]}</div>`;
+    return `<div class="am-card">${escapeHtml(ws[0])}<br><span style="color:#aaa">——</span><br>${escapeHtml(ws[1])}</div>`;
   }
 
   document.getElementById('mainArea').innerHTML = `
@@ -713,8 +723,8 @@ function renderScoring(state) {
           <div style="font-size:.85rem;color:#888;margin-bottom:8px;font-weight:600;">CLUES</div>
           ${['ne','se','sw','nw'].map(e=>`
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-              <span class="hint-chip" style="min-width:70px;text-align:center;">${clues[e]||'?'}</span>
-              <span style="font-size:.8rem;color:#888">${edges[e]?edges[e].join(' · '):'?'}</span>
+              <span class="hint-chip" style="min-width:70px;text-align:center;">${escapeHtml(clues[e]||'?')}</span>
+              <span style="font-size:.8rem;color:#888">${edges[e]?edges[e].map(w=>escapeHtml(w)).join(' · '):'?'}</span>
             </div>
           `).join('')}
         </div>
