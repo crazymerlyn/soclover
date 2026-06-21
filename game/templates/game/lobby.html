@@ -106,10 +106,13 @@ function escapeHtml(str) {
 function escapeJs(str) {
   if (!str) return '';
   return str.replace(/\\/g, '\\\\')
+            .replace(/\0/g, '\\0')
             .replace(/'/g, "\\'")
             .replace(/"/g, '\\"')
+            .replace(/`/g, '\\`')
             .replace(/\n/g, '\\n')
-            .replace(/\r/g, '\\r');
+            .replace(/\r/g, '\\r')
+            .replace(/\$/g, '\\$');
 }
 
 async function copyCode() {
@@ -195,6 +198,8 @@ async function kickPlayer(id, name) {
   }
 }
 
+let lastPlayersHash = '';
+
 async function poll() {
   try {
     const r = await fetch(`/api/${ROOM_CODE}/state/`);
@@ -205,7 +210,14 @@ async function poll() {
       window.location.href = `/room/${ROOM_CODE}/game/`;
       return;
     }
-    if (d.players) renderPlayers(d.players);
+    if (d.players) {
+      // Create a simple hash of the player list to detect changes
+      const hash = JSON.stringify(d.players.map(p => [p.id, p.name, p.is_host]));
+      if (hash !== lastPlayersHash) {
+        lastPlayersHash = hash;
+        renderPlayers(d.players);
+      }
+    }
   } catch {
     // transient error — next poll will retry
   }

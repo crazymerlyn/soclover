@@ -232,10 +232,13 @@ function escapeHtml(str) {
 function escapeJs(str) {
   if (!str) return '';
   return str.replace(/\\/g, '\\\\')
+            .replace(/\0/g, '\\0')
             .replace(/'/g, "\\'")
             .replace(/"/g, '\\"')
+            .replace(/`/g, '\\`')
             .replace(/\n/g, '\\n')
-            .replace(/\r/g, '\\r');
+            .replace(/\r/g, '\\r')
+            .replace(/\$/g, '\\$');
 }
 
 let lastStatus  = null;
@@ -821,6 +824,15 @@ function renderFinished(state) {
 let lastState = null;
 let pollInterval = null;
 let pollInFlight = false;
+let consecutiveErrors = 0;
+const BASE_POLL_INTERVAL = 2500;
+const MAX_POLL_INTERVAL = 10000;
+
+function scheduleNextPoll() {
+  if (pollInterval) clearInterval(pollInterval);
+  const delay = Math.min(BASE_POLL_INTERVAL * Math.pow(1.5, consecutiveErrors), MAX_POLL_INTERVAL);
+  pollInterval = setInterval(poll, delay);
+}
 
 async function poll() {
   if (pollInFlight) return;  // Don't stack polls
@@ -830,13 +842,16 @@ async function poll() {
   try {
     const r = await fetch(`/api/${ROOM_CODE}/state/`);
     const ct = r.headers.get('content-type') || '';
-    if (!ct.includes('json')) { pollInFlight = false; return; }
+    if (!ct.includes('json')) { pollInFlight = false; consecutiveErrors++; scheduleNextPoll(); return; }
     state = await r.json();
+    consecutiveErrors = 0;  // Reset on success
   } catch {
     pollInFlight = false;
+    consecutiveErrors++;
+    scheduleNextPoll();
     return;
   }
-  if (state.error) { pollInFlight = false; return; }
+  if (state.error) { pollInFlight = false; consecutiveErrors++; scheduleNextPoll(); return; }
 
   lastState = state;
   if (state.players) renderSidebar(state.players, state.status);
@@ -880,6 +895,6 @@ window.addEventListener('beforeunload', (e) => {
 });
 
 poll();
-pollInterval = setInterval(poll, 2500);
+scheduleNextPoll();
 </script>
 {% endblock %}

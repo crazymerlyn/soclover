@@ -9,7 +9,7 @@ if not SECRET_KEY:
         raise ValueError("DJANGO_SECRET_KEY environment variable is required in production")
     SECRET_KEY = 'django-insecure-soclover-dev-key-change-in-production'
 
-DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
+DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() in ('true', '1', 'yes')
 
 if DEBUG:
     import warnings

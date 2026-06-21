@@ -61,7 +61,7 @@ class Room(models.Model):
 class Player(models.Model):
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name='players')
     name = models.CharField(max_length=50)
-    session_key = models.CharField(max_length=40)
+    session_key = models.CharField(max_length=128)
     is_host = models.BooleanField(default=False)
     score = models.IntegerField(default=0)
     order = models.IntegerField(default=0)
