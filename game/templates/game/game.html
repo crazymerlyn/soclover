@@ -427,9 +427,24 @@ async function submitClues() {
   if (!clues.ne||!clues.se||!clues.sw||!clues.nw) {
     alert('Please fill in all four clues.'); return;
   }
+  
+  // Find and disable the submit button
+  const submitBtn = document.querySelector('.btn-green[onclick="submitClues()"]');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting…';
+  }
+  
   const d = await apiPost(`/api/${ROOM_CODE}/submit-clues/`, clues);
-  if (!d.success) alert(d.error || 'Error submitting clues');
-  else poll();
+  if (!d.success) {
+    alert(d.error || 'Error submitting clues');
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Submit Clues ✔';
+    }
+  } else {
+    poll();
+  }
 }
 
 // ─────────── Guessing phase ─────────────────────────────────────────────────
@@ -665,16 +680,33 @@ async function submitGuess() {
   if (Object.values(placed).some(v=>!v)) { alert('Place all 4 cards first.'); return; }
   const cloverIndex = lastState?.guessing?.clover_index;
   if (cloverIndex === undefined) { alert('Game state error. Please refresh.'); return; }
+  
+  // Confirm before submitting
+  if (!confirm('Are you sure you want to submit your guess? This cannot be undone.')) {
+    return;
+  }
+  
+  // Find and disable the submit button
+  const submitBtn = document.querySelector('.btn-green[onclick="submitGuess()"]');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting…';
+  }
+  
   const d = await apiPost(`/api/${ROOM_CODE}/submit-guess/`, {
-    arrangement: placed,
-    clover_index: cloverIndex
+    arrangement: placed, clover_index: cloverIndex
   });
   if (d.success) {
     alert(`You got ${d.score}/4 correct! 🎉`);
     poll();
   } else {
     alert(d.error || 'Error');
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Submit Guess ✔';
+    }
   }
+}
 }
 
 // ─────────── Scoring phase ──────────────────────────────────────────────────
@@ -788,18 +820,24 @@ function renderFinished(state) {
 
 // ─────────── Main poll loop ─────────────────────────────────────────────────
 let lastState = null;
+let pollInterval = null;
+let pollInFlight = false;
 
 async function poll() {
+  if (pollInFlight) return;  // Don't stack polls
+  pollInFlight = true;
+  
   let state;
   try {
     const r = await fetch(`/api/${ROOM_CODE}/state/`);
     const ct = r.headers.get('content-type') || '';
-    if (!ct.includes('json')) return;
+    if (!ct.includes('json')) { pollInFlight = false; return; }
     state = await r.json();
   } catch {
+    pollInFlight = false;
     return;
   }
-  if (state.error) return;
+  if (state.error) { pollInFlight = false; return; }
 
   lastState = state;
   if (state.players) renderSidebar(state.players, state.status);
@@ -818,7 +856,16 @@ async function poll() {
   if (state.status === 'writing')  renderWriting(state);
   else if (state.status === 'guessing') renderGuessing(state);
   else if (state.status === 'scoring')  renderScoring(state);
-  else if (state.status === 'finished') renderFinished(state);
+  else if (state.status === 'finished') {
+    renderFinished(state);
+    // Stop polling when game is finished
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+  }
+  
+  pollInFlight = false;
 }
 
 window.addEventListener('beforeunload', (e) => {
@@ -834,6 +881,6 @@ window.addEventListener('beforeunload', (e) => {
 });
 
 poll();
-setInterval(poll, 2500);
+pollInterval = setInterval(poll, 2500);
 </script>
 {% endblock %}
