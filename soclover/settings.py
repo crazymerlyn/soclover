@@ -6,8 +6,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
 if not SECRET_KEY:
     if os.environ.get('VERCEL'):
-        raise ValueError("DJANGO_SECRET_KEY environment variable is required in production")
-    SECRET_KEY = 'django-insecure-soclover-dev-key-change-in-production'
+        import secrets as _secrets
+        SECRET_KEY = _secrets.token_urlsafe(50)
+    else:
+        SECRET_KEY = 'django-insecure-soclover-dev-key-change-in-production'
 
 DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() in ('true', '1', 'yes')
 
