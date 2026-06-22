@@ -204,7 +204,11 @@ async function poll() {
   try {
     const r = await fetch(`/api/${ROOM_CODE}/state/`);
     const ct = r.headers.get('content-type') || '';
-    if (!ct.includes('json')) return;
+    if (!ct.includes('json')) {
+      // Non-JSON response (likely 403) means player was kicked or removed
+      window.location.href = '/';
+      return;
+    }
     const d = await r.json();
     if (d.status !== 'lobby') {
       window.location.href = `/room/${ROOM_CODE}/game/`;
