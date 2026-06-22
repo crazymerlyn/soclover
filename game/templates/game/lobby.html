@@ -81,7 +81,7 @@
   <button id="startBtn" class="btn btn-green" style="width:100%;padding:14px;font-size:1rem;" onclick="startGame()" disabled>
     Start Game
   </button>
-  <p style="text-align:center;color:#999;font-size:.85rem;margin-top:8px;">Need at least 2 players</p>
+  <p style="text-align:center;color:#999;font-size:.85rem;margin-top:8px;">Need at least 1 player</p>
   {% else %}
   <div class="msg-waiting">Waiting for the host to start the game<span class="waiting-dots"></span></div>
   {% endif %}
@@ -181,7 +181,7 @@ function renderPlayers(players) {
 
   if (IS_HOST) {
     const btn = document.getElementById('startBtn');
-    btn.disabled = players.length < 2;
+    btn.disabled = players.length < 1;
   }
 }
 

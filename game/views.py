@@ -228,8 +228,8 @@ def start_game(request, code):
             return JsonResponse({"error": "Game already started."}, status=400)
 
         players = list(room.players.order_by("order"))
-        if len(players) < 2:
-            return JsonResponse({"error": "Need at least 2 players."}, status=400)
+        if len(players) < 1:
+            return JsonResponse({"error": "Need at least 1 player."}, status=400)
 
         needed = len(players) * 4
         if needed > len(WORD_CARDS):

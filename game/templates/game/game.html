@@ -292,11 +292,11 @@ function renderLobby(state) {
   document.getElementById('phaseLabel').textContent = '🏠 Lobby';
   document.getElementById('sidebarExtra').innerHTML = '';
 
-  const canStart = IS_HOST && state.players.length >= 2;
+  const canStart = IS_HOST && state.players.length >= 1;
   document.getElementById('mainArea').innerHTML = `
     <div class="section-box">
       <h3>Waiting for players…</h3>
-      <p style="color:#666;margin-bottom:16px;">Need at least 2 players. Share code: <strong>${ROOM_CODE}</strong></p>
+      <p style="color:#666;margin-bottom:16px;">Share code: <strong>${ROOM_CODE}</strong></p>
       ${IS_HOST ? `<button class="btn btn-green" onclick="startGame()" ${canStart?'':'disabled'}>Start Game</button>` : '<p class="msg-waiting">Waiting for host to start…</p>'}
     </div>`;
 }
