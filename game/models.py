@@ -83,23 +83,30 @@ class Clover(models.Model):
     data layout (JSONField):
     {
       "arrangement": {
-        "n": {"words": ["OCEAN","WAVE"], "flipped": false, "card_idx": 0},
-        "e": {"words": ["WOLF","HOWL"],  "flipped": true,  "card_idx": 5},
-        "s": {"words": ["CROWN","SCEPTER"],"flipped":false,"card_idx":16},
-        "w": {"words": ["SPIDER","SILK"],"flipped": false, "card_idx": 14}
+        "nw": {"words": ["OCEAN","WAVE"], "flipped": false, "card_idx": 0},
+        "ne": {"words": ["WOLF","HOWL"],  "flipped": true,  "card_idx": 5},
+        "sw": {"words": ["CROWN","SCEPTER"],"flipped":false,"card_idx":16},
+        "se": {"words": ["SPIDER","SILK"],"flipped": false, "card_idx": 14}
       },
-      "clues": {"ne": "sea", "se": "royalty", "sw": "web", "nw": "night"},
+      "clues": {"n": "sea", "e": "royalty", "s": "web", "w": "night"},
       "cards": [           <-- filled after clues submitted, includes 2 red herrings
         {"idx": 0, "words": ["OCEAN","WAVE"]},
         ...6 total, shuffled
       ]
     }
 
+    Board layout (cards at corners, clues at cardinal edges):
+      [ N clue  ]
+      [NW card]      [NE card]
+        [ W clue ] [ center ] [ E clue ]
+      [SW card]      [SE card]
+      [ S clue  ]
+
     Edge word derivation (flipped swaps which word faces which edge):
-      NE = arrangement.n primary   + arrangement.e secondary
-      SE = arrangement.e primary   + arrangement.s secondary
-      SW = arrangement.s primary   + arrangement.w secondary
-      NW = arrangement.w primary   + arrangement.n secondary
+      N = arrangement.nw primary   + arrangement.ne primary
+      E = arrangement.ne secondary + arrangement.se secondary
+      S = arrangement.sw primary   + arrangement.se primary
+      W = arrangement.nw secondary + arrangement.sw secondary
 
     where primary  = words[0] if not flipped else words[1]
           secondary= words[1] if not flipped else words[0]
@@ -118,10 +125,10 @@ class Guess(models.Model):
 
     data layout:
     {
-      "n": {"idx": 0},
-      "e": {"idx": 5},
-      "s": {"idx": 16},
-      "w": {"idx": 14}
+      "nw": {"idx": 0},
+      "ne": {"idx": 5},
+      "sw": {"idx": 16},
+      "se": {"idx": 14}
     }
     """
     guesser = models.ForeignKey(Player, on_delete=models.CASCADE, related_name='guesses_made')

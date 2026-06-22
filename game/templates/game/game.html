@@ -92,11 +92,11 @@
 .clover-slot .remove-btn:hover { color:var(--red); }
 .clover-slot .flip-btn { font-size:.6rem; color:var(--green); background:none; border:1px solid var(--green); border-radius:4px; padding:1px 5px; cursor:pointer; margin-top:2px; }
 
-/* Leaf cells (N, E, S, W) extend outward */
-.clover-grid .leaf-n { align-self: start; justify-self: center; padding-top: 8px; }
-.clover-grid .leaf-s { align-self: end;   justify-self: center; padding-bottom: 8px; }
-.clover-grid .leaf-e { align-self: center; justify-self: end;   padding-right: 8px; }
-.clover-grid .leaf-w { align-self: center; justify-self: start; padding-left: 8px; }
+/* Leaf cells — cards at NW, NE, SW, SE extend outward */
+.clover-grid .leaf-nw { align-self: start; justify-self: start; padding: 8px; }
+.clover-grid .leaf-ne { align-self: start; justify-self: end; padding: 8px; }
+.clover-grid .leaf-sw { align-self: end;   justify-self: start; padding: 8px; }
+.clover-grid .leaf-se { align-self: end;   justify-self: end; padding: 8px; }
 
 /* Hint cell — clue bump between leaves */
 .hint-cell {
@@ -391,9 +391,9 @@ function renderWriting(state) {
 
 function renderCloVer_writing(edges, clues, disabled) {
   const v = (edge, which) => edges[edge] ? edges[edge][which] : '?';
-  const inp = (id, placeholder, val) =>
+  const inp = (id, edgeKey, val) =>
     `<div class="hint-cell">
-       <div class="hint-words">${placeholder.split('|')[0]}<br>${placeholder.split('|')[1]}</div>
+       <div class="hint-words">${escapeHtml(v(edgeKey,0))}<br>${escapeHtml(v(edgeKey,1))}</div>
        <input id="${id}" type="text" maxlength="25"
               placeholder="your clue…"
               value="${escapeHtml(val)}"
@@ -404,57 +404,61 @@ function renderCloVer_writing(edges, clues, disabled) {
     <div class="clover-wrapper">
       <svg class="clover-bg" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
         <g fill="#4caf50" opacity="0.15">
-          <!-- N leaf -->
-          <ellipse cx="200" cy="95" rx="75" ry="85"/>
-          <!-- E leaf -->
-          <ellipse cx="305" cy="200" rx="85" ry="75"/>
-          <!-- S leaf -->
-          <ellipse cx="200" cy="305" rx="75" ry="85"/>
-          <!-- W leaf -->
-          <ellipse cx="95" cy="200" rx="85" ry="75"/>
+          <!-- NW leaf -->
+          <ellipse cx="130" cy="130" rx="85" ry="85"/>
+          <!-- NE leaf -->
+          <ellipse cx="270" cy="130" rx="85" ry="85"/>
+          <!-- SW leaf -->
+          <ellipse cx="130" cy="270" rx="85" ry="85"/>
+          <!-- SE leaf -->
+          <ellipse cx="270" cy="270" rx="85" ry="85"/>
         </g>
       </svg>
       <div class="clover-grid">
-        <!-- row 0: NW hint, N card, NE hint -->
-        <div class="cg-cell">${inp('clue_nw','NW:|'+escapeHtml(v('nw',0))+' · '+escapeHtml(v('nw',1)), clues.nw)}</div>
-        <div class="cg-cell leaf-n">
+        <!-- row 0: N clue, empty, empty -->
+        <div class="cg-cell" style="grid-column:1/-1;">${inp('clue_n','n',clues.n)}</div>
+        <!-- row 1: NW card, empty, NE card -->
+        <div class="cg-cell leaf-nw">
           <div class="clover-slot has-card" style="cursor:default;">
-            <div class="pos-label">N</div>
-            <div class="slot-word">${escapeHtml(v('nw',1))}</div>
+            <div class="pos-label">NW</div>
+            <div class="slot-word">${escapeHtml(v('n',0))}</div>
             <div class="slot-divider"></div>
-            <div class="slot-word">${escapeHtml(v('ne',0))}</div>
+            <div class="slot-word">${escapeHtml(v('w',0))}</div>
           </div>
         </div>
-        <div class="cg-cell">${inp('clue_ne','NE:|'+escapeHtml(v('ne',0))+' · '+escapeHtml(v('ne',1)), clues.ne)}</div>
-        <!-- row 1: W card, center, E card -->
-        <div class="cg-cell leaf-w">
+        <div class="cg-cell"></div>
+        <div class="cg-cell leaf-ne">
           <div class="clover-slot has-card" style="cursor:default;">
-            <div class="pos-label">W</div>
-            <div class="slot-word">${escapeHtml(v('nw',0))}</div>
+            <div class="pos-label">NE</div>
+            <div class="slot-word">${escapeHtml(v('n',1))}</div>
             <div class="slot-divider"></div>
-            <div class="slot-word">${escapeHtml(v('sw',1))}</div>
+            <div class="slot-word">${escapeHtml(v('e',0))}</div>
           </div>
         </div>
+        <!-- row 2: W clue, center, E clue -->
+        <div class="cg-cell">${inp('clue_w','w',clues.w)}</div>
         <div class="cg-cell"><div class="clover-center"></div></div>
-        <div class="cg-cell leaf-e">
+        <div class="cg-cell">${inp('clue_e','e',clues.e)}</div>
+        <!-- row 3: SW card, empty, SE card -->
+        <div class="cg-cell leaf-sw">
           <div class="clover-slot has-card" style="cursor:default;">
-            <div class="pos-label">E</div>
-            <div class="slot-word">${escapeHtml(v('ne',1))}</div>
+            <div class="pos-label">SW</div>
+            <div class="slot-word">${escapeHtml(v('s',0))}</div>
             <div class="slot-divider"></div>
-            <div class="slot-word">${escapeHtml(v('se',0))}</div>
+            <div class="slot-word">${escapeHtml(v('w',1))}</div>
           </div>
         </div>
-        <!-- row 2: SW hint, S card, SE hint -->
-        <div class="cg-cell">${inp('clue_sw','SW:|'+escapeHtml(v('sw',0))+' · '+escapeHtml(v('sw',1)), clues.sw)}</div>
-        <div class="cg-cell leaf-s">
+        <div class="cg-cell"></div>
+        <div class="cg-cell leaf-se">
           <div class="clover-slot has-card" style="cursor:default;">
-            <div class="pos-label">S</div>
-            <div class="slot-word">${escapeHtml(v('se',1))}</div>
+            <div class="pos-label">SE</div>
+            <div class="slot-word">${escapeHtml(v('s',1))}</div>
             <div class="slot-divider"></div>
-            <div class="slot-word">${escapeHtml(v('sw',0))}</div>
+            <div class="slot-word">${escapeHtml(v('e',1))}</div>
           </div>
         </div>
-        <div class="cg-cell">${inp('clue_se','SE:|'+escapeHtml(v('se',0))+' · '+escapeHtml(v('se',1)), clues.se)}</div>
+        <!-- row 4: S clue, empty, empty -->
+        <div class="cg-cell" style="grid-column:1/-1;">${inp('clue_s','s',clues.s)}</div>
       </div>
     </div>
   `;
@@ -462,8 +466,8 @@ function renderCloVer_writing(edges, clues, disabled) {
 
 async function submitClues() {
   const get = id => document.getElementById(id)?.value.trim() || '';
-  const clues = {ne: get('clue_ne'), se: get('clue_se'), sw: get('clue_sw'), nw: get('clue_nw')};
-  if (!clues.ne||!clues.se||!clues.sw||!clues.nw) {
+  const clues = {n: get('clue_n'), e: get('clue_e'), s: get('clue_s'), w: get('clue_w')};
+  if (!clues.n||!clues.e||!clues.s||!clues.w) {
     alert('Please fill in all four clues.'); return;
   }
   
@@ -488,7 +492,7 @@ async function submitClues() {
 
 // ─────────── Guessing phase ─────────────────────────────────────────────────
 // State: placed = {n:{idx,flipped?}, e:…, s:…, w:…}
-let placed = {n:null,e:null,s:null,w:null};
+let placed = {nw:null,ne:null,sw:null,se:null};
 
 function renderGuessing(state) {
   const g = state.guessing;
@@ -566,6 +570,11 @@ function cardWords(cardEntry, flipped) {
 }
 
 // Derives edge word pair from currently placed cards
+// Cards at nw, ne, sw, se. Clues at n, e, s, w.
+// N = nw.primary(0) + ne.primary(0)
+// E = ne.secondary(1) + se.secondary(1)
+// S = sw.primary(0) + se.primary(0)
+// W = nw.secondary(1) + sw.secondary(1)
 function derivedEdge(cards, pos1, w1idx, pos2, w2idx) {
   const p1 = placed[pos1];
   const p2 = placed[pos2];
@@ -583,11 +592,10 @@ function renderGuesserBoard(g) {
   const placedIndices = new Set(Object.values(placed).filter(Boolean).map(p=>p.idx));
 
   // Derived edge words from current placement
-  // NE = N.primary(0) + E.secondary(1)  → N[0], E[1]
-  const ne = derivedEdge(cards,'n',0,'e',1);
-  const se = derivedEdge(cards,'e',0,'s',1);
-  const sw = derivedEdge(cards,'s',0,'w',1);
-  const nw = derivedEdge(cards,'w',0,'n',1);
+  const edgeN = derivedEdge(cards,'nw',0,'ne',0);
+  const edgeE = derivedEdge(cards,'ne',1,'se',1);
+  const edgeS = derivedEdge(cards,'sw',0,'se',0);
+  const edgeW = derivedEdge(cards,'nw',1,'sw',1);
 
   function slotHTML(pos) {
     const p = placed[pos];
@@ -645,25 +653,29 @@ function hintHTML(edge, clue, w) {
       <div class="clover-wrapper" style="margin-top:16px;">
         <svg class="clover-bg" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
           <g fill="#4caf50" opacity="0.15">
-            <ellipse cx="200" cy="95" rx="75" ry="85"/>
-            <ellipse cx="305" cy="200" rx="85" ry="75"/>
-            <ellipse cx="200" cy="305" rx="75" ry="85"/>
-            <ellipse cx="95" cy="200" rx="85" ry="75"/>
+            <ellipse cx="130" cy="130" rx="85" ry="85"/>
+            <ellipse cx="270" cy="130" rx="85" ry="85"/>
+            <ellipse cx="130" cy="270" rx="85" ry="85"/>
+            <ellipse cx="270" cy="270" rx="85" ry="85"/>
           </g>
         </svg>
         <div class="clover-grid">
-          <!-- row 0: NW hint, N card, NE hint -->
-          <div class="cg-cell">${hintHTML('nw', clues.nw||'?', nw)}</div>
-          <div class="cg-cell leaf-n">${slotHTML('n')}</div>
-          <div class="cg-cell">${hintHTML('ne', clues.ne||'?', ne)}</div>
-          <!-- row 1: W card, center, E card -->
-          <div class="cg-cell leaf-w">${slotHTML('w')}</div>
+          <!-- row 0: N hint (full width) -->
+          <div class="cg-cell" style="grid-column:1/-1;">${hintHTML('n', clues.n||'?', edgeN)}</div>
+          <!-- row 1: NW card, empty, NE card -->
+          <div class="cg-cell leaf-nw">${slotHTML('nw')}</div>
+          <div class="cg-cell"></div>
+          <div class="cg-cell leaf-ne">${slotHTML('ne')}</div>
+          <!-- row 2: W hint, center, E hint -->
+          <div class="cg-cell">${hintHTML('w', clues.w||'?', edgeW)}</div>
           <div class="cg-cell"><div class="clover-center"></div></div>
-          <div class="cg-cell leaf-e">${slotHTML('e')}</div>
-          <!-- row 2: SW hint, S card, SE hint -->
-          <div class="cg-cell">${hintHTML('sw', clues.sw||'?', sw)}</div>
-          <div class="cg-cell leaf-s">${slotHTML('s')}</div>
-          <div class="cg-cell">${hintHTML('se', clues.se||'?', se)}</div>
+          <div class="cg-cell">${hintHTML('e', clues.e||'?', edgeE)}</div>
+          <!-- row 3: SW card, empty, SE card -->
+          <div class="cg-cell leaf-sw">${slotHTML('sw')}</div>
+          <div class="cg-cell"></div>
+          <div class="cg-cell leaf-se">${slotHTML('se')}</div>
+          <!-- row 4: S hint (full width) -->
+          <div class="cg-cell" style="grid-column:1/-1;">${hintHTML('s', clues.s||'?', edgeS)}</div>
         </div>
       </div>
 
@@ -771,15 +783,15 @@ function renderScoring(state) {
           <div style="font-size:.85rem;color:#888;margin-bottom:8px;font-weight:600;">CORRECT ARRANGEMENT</div>
           <div class="arrange-mini">
             <div class="am-cell"></div>
-            <div class="am-cell">${miniCard('n')}</div>
+            <div class="am-cell">${miniCard('nw')}</div>
             <div class="am-cell"></div>
 
-            <div class="am-cell">${miniCard('w')}</div>
+            <div class="am-cell">${miniCard('sw')}</div>
             <div class="am-cell"><div class="clover-center"></div></div>
-            <div class="am-cell">${miniCard('e')}</div>
+            <div class="am-cell">${miniCard('se')}</div>
 
             <div class="am-cell"></div>
-            <div class="am-cell">${miniCard('s')}</div>
+            <div class="am-cell">${miniCard('ne')}</div>
             <div class="am-cell"></div>
           </div>
         </div>
@@ -787,7 +799,7 @@ function renderScoring(state) {
         <!-- clues + correct word pairs -->
         <div style="flex:1;min-width:200px;">
           <div style="font-size:.85rem;color:#888;margin-bottom:8px;font-weight:600;">CLUES</div>
-          ${['ne','se','sw','nw'].map(e=>`
+          ${['n','e','s','w'].map(e=>`
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
               <span class="hint-chip" style="min-width:70px;text-align:center;">${escapeHtml(clues[e]||'?')}</span>
               <span style="font-size:.8rem;color:#888">${edges[e]?edges[e].map(w=>escapeHtml(w)).join(' · '):'?'}</span>

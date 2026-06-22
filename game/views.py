@@ -56,18 +56,23 @@ def secondary(card_entry):
 
 def get_edge_words(arrangement):
     """
-    Returns the two words visible at each of the 4 hint spaces.
-    NE = N.primary  + E.secondary
-    SE = E.primary  + S.secondary
-    SW = S.primary  + W.secondary
-    NW = W.primary  + N.secondary
+    Cards are placed at NW, NE, SW, SE (2x2 grid).
+    Clue zones are at N, E, S, W (cardinal positions).
+
+    For each card, primary faces outward (N for top cards, S for bottom),
+    secondary faces outward (W for left cards, E for right).
+
+    N = NW.primary + NE.primary  (both words visible at top edge)
+    E = NE.secondary + SE.secondary  (both words visible at right edge)
+    S = SW.primary + SE.primary  (both words visible at bottom edge)
+    W = NW.secondary + SW.secondary  (both words visible at left edge)
     """
-    n, e, s, w = (arrangement[p] for p in ("n", "e", "s", "w"))
+    nw, ne, sw, se = (arrangement[p] for p in ("nw", "ne", "sw", "se"))
     return {
-        "ne": [primary(n), secondary(e)],
-        "se": [primary(e), secondary(s)],
-        "sw": [primary(s), secondary(w)],
-        "nw": [primary(w), secondary(n)],
+        "n": [primary(nw), primary(ne)],
+        "e": [secondary(ne), secondary(se)],
+        "s": [primary(sw), primary(se)],
+        "w": [secondary(nw), secondary(sw)],
     }
 
 
@@ -241,7 +246,7 @@ def start_game(request, code):
             chosen = all_indices[used : used + 4]
             used += 4
             arrangement = {}
-            for pos, idx in zip(["n", "e", "s", "w"], chosen):
+            for pos, idx in zip(["nw", "ne", "sw", "se"], chosen):
                 arrangement[pos] = {
                     "words": list(WORD_CARDS[idx]),
                     "flipped": _csprng.choice([True, False]),
@@ -441,7 +446,7 @@ def submit_clues(request, code):
     except (json.JSONDecodeError, ValueError):
         return JsonResponse({"error": "Invalid JSON."}, status=400)
 
-    clues = {k: body.get(k, "").strip() for k in ("ne", "se", "sw", "nw")}
+    clues = {k: body.get(k, "").strip() for k in ("n", "e", "s", "w")}
 
     if not all(clues.values()):
         return JsonResponse({"error": "All four clues are required."}, status=400)
@@ -469,10 +474,10 @@ def submit_clues(request, code):
 
         # Build shuffled card list (4 real + 2 red herrings)
         arrangement = clover.data["arrangement"]
-        used_indices = {arrangement[p]["card_idx"] for p in ("n", "e", "s", "w")}
+        used_indices = {arrangement[p]["card_idx"] for p in ("nw", "ne", "sw", "se")}
         real_cards = [
             {"idx": arrangement[p]["card_idx"], "words": arrangement[p]["words"]}
-            for p in ("n", "e", "s", "w")
+            for p in ("nw", "ne", "sw", "se")
         ]
         available = [i for i in range(len(WORD_CARDS)) if i not in used_indices]
         if len(available) < 2:
@@ -516,7 +521,7 @@ def submit_guess(request, code):
     client_clover_idx = body.get("clover_index")
 
     # Validate arrangement structure and card indices early (pure Python, no DB)
-    valid_positions = {"n", "e", "s", "w"}
+    valid_positions = {"nw", "ne", "sw", "se"}
     max_idx = len(WORD_CARDS) - 1
     for p in valid_positions:
         entry = guess_arr.get(p)
