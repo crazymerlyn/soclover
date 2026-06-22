@@ -1,395 +1,319 @@
 {% extends "game/base.html" %}
+{% block title %}So Clover – Game{% endblock %}
 
-{% block header_extra %}
-<span id="phaseLabel" style="margin-left:16px;font-size:.9rem;opacity:.8;"></span>
-<span class="room-code">{{ room.code }}</span>
-{% endblock %}
+{% block content %}
+<div id="app">
+  <div class="top-bar">
+    <div>
+      <div class="room-code" id="roomCode"></div>
+      <div class="player-name" id="playerName"></div>
+    </div>
+    <div class="phase-pill" id="phaseLabel">Waiting…</div>
+  </div>
 
-{% block extra_style %}
+  <div class="game-layout">
+    <div class="main-area" id="mainArea"></div>
+    <div class="sidebar">
+      <div class="sidebar-section">
+        <h4>Players</h4>
+        <div id="playerList"></div>
+      </div>
+      <div id="sidebarExtra"></div>
+    </div>
+  </div>
+</div>
+
+<style>
+:root {
+  --green: #4caf50;
+  --green-light: #81c784;
+  --green-dark: #388e3c;
+  --red: #e53935;
+  --card-bg: #fff;
+  --card-border: #c8e6c9;
+  --hint-bg: #f1f8e9;
+  --hint-border: #a5d6a7;
+  --shadow: 0 2px 8px rgba(0,0,0,.1);
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:'Segoe UI',system-ui,sans-serif; background:#f5f5f5; color:#333; }
+
+/* ── Top bar ── */
+.top-bar { display:flex; justify-content:space-between; align-items:center; padding:12px 20px; background:#fff; box-shadow:var(--shadow); }
+.room-code { font-size:1.1rem; font-weight:800; color:var(--green); letter-spacing:2px; }
+.player-name { font-size:.8rem; color:#888; }
+.phase-pill { background:var(--green); color:#fff; font-size:.75rem; font-weight:700; padding:4px 12px; border-radius:12px; }
+
 /* ── Layout ── */
-.game-wrap { display:flex; gap:24px; align-items:flex-start; }
-.sidebar {
-  width: 220px;
-  flex-shrink: 0;
-}
-.main-area { flex: 1; min-width: 0; }
+.game-layout { display:flex; gap:20px; padding:20px; max-width:1100px; margin:0 auto; }
+.main-area { flex:1; min-width:0; }
+.sidebar { width:240px; flex-shrink:0; }
+.sidebar-section { background:#fff; border-radius:12px; box-shadow:var(--shadow); padding:14px; margin-bottom:14px; }
+.sidebar-section h4 { font-size:.85rem; color:#888; margin-bottom:8px; }
 
-/* ── Player sidebar ── */
-.player-panel {
-  background:#fff;
-  border-radius:12px;
-  box-shadow: var(--shadow);
-  overflow:hidden;
-  margin-bottom:16px;
-}
-.player-panel h4 { padding:10px 14px; background:var(--green-pale); font-size:.85rem; color:var(--green); border-bottom:1px solid #c8e6c9; }
-.sp-item { display:flex; align-items:center; gap:8px; padding:9px 14px; border-bottom:1px solid #f5f5f5; font-size:.88rem; }
-.sp-item:last-child { border-bottom:none; }
+/* ── Player list ── */
+.player-row { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid #f0f0f0; font-size:.85rem; }
+.player-row:last-child { border-bottom:none; }
 .sp-dot { width:10px;height:10px;border-radius:50%;background:#ccc;flex-shrink:0; }
 .sp-dot.done { background:var(--green-light); }
 .sp-score { margin-left:auto; font-weight:700; color:var(--green); font-size:.85rem; }
 
-/* ── Clover board ── */
-/*  5×3 grid — the clover shape:
-           c0        c1        c2
-  r0 [   N clue (full width)         ]
-  r1 [  NW card ] [       ] [ NE card]
-  r2 [  W clue  ] [center ] [ E clue ]
-  r3 [  SW card ] [       ] [ SE card]
-  r4 [   S clue (full width)         ]
-
-  Cards at NW/NE/SW/SE (2×2 grid)
-  Clue zones at N/E/S/W (cardinal edges)
-*/
-.clover-wrapper {
+/* ── Board ── */
+.board-wrapper {
   position: relative;
   width: 100%;
-  max-width: 440px;
+  max-width: 420px;
   margin: 0 auto;
-  padding: 30px;
 }
-.clover-bg {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-}
-.clover-grid {
-  position: relative;
-  z-index: 1;
+.board-grid {
   display: grid;
-  grid-template-columns: 1fr 1.3fr 1fr;
-  grid-template-rows: auto 1fr auto 1fr auto;
+  grid-template-columns: 1fr auto 1fr;
+  grid-template-rows: 1fr auto 1fr;
   gap: 0;
   width: 100%;
   aspect-ratio: 1;
+  background: var(--green);
+  border-radius: 12px;
+  padding: 6px;
 }
-.cg-cell { display:flex; align-items:center; justify-content:center; }
+.board-cell { display:flex; align-items:center; justify-content:center; }
 
-/* Card slot — clover leaf */
-.clover-slot {
+/* Card — square with 4 edge words */
+.board-card {
   background: var(--card-bg);
   border: 2px solid var(--card-border);
-  border-radius: 50%;
-  width: 90%;
-  height: 90%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 8px;
-  cursor: pointer;
-  transition: background .15s, border-color .15s, transform .15s;
+  border-radius: 6px;
+  width: 92%;
+  height: 92%;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  grid-template-columns: auto 1fr auto;
   position: relative;
 }
-.clover-slot:hover { transform: scale(1.03); }
-.clover-slot.has-card  { border-style:solid; background:#f9fbe7; cursor:default; }
-.clover-slot.has-card:hover { transform:none; }
-.clover-slot.drop-target { border-color:var(--green-light); background:#f1f8e9; border-style:dashed; animation: pulse-border 1.5s ease infinite; }
-@keyframes pulse-border { 0%,100%{border-color:var(--green-light)} 50%{border-color:var(--green)} }
-.clover-slot .pos-label { font-size:.6rem; color:#bbb; position:absolute; top:6px; left:50%; transform:translateX(-50%); text-transform:uppercase; font-weight:600; letter-spacing:.5px; }
-.clover-slot .slot-word { font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.3px; text-align:center; }
-.clover-slot .slot-divider { width:28px; height:1px; background:var(--card-border); }
-.clover-slot .remove-btn { position:absolute; top:2px; right:6px; font-size:.7rem; cursor:pointer; color:#aaa; background:none; border:none; line-height:1; }
-.clover-slot .remove-btn:hover { color:var(--red); }
-.clover-slot .flip-btn { font-size:.6rem; color:var(--green); background:none; border:1px solid var(--green); border-radius:4px; padding:1px 5px; cursor:pointer; margin-top:2px; }
-
-/* Leaf cells — cards at NW, NE, SW, SE extend outward */
-.clover-grid .leaf-nw { align-self: start; justify-self: start; padding: 8px; }
-.clover-grid .leaf-ne { align-self: start; justify-self: end; padding: 8px; }
-.clover-grid .leaf-sw { align-self: end;   justify-self: start; padding: 8px; }
-.clover-grid .leaf-se { align-self: end;   justify-self: end; padding: 8px; }
-
-/* Card diamond — shows all 4 words on a card */
-.card-diamond {
-  position: relative;
-  width: 90px;
-  height: 90px;
+.board-card .cw { 
+  font-size: .6rem; font-weight: 700; text-transform: uppercase; 
+  letter-spacing: .3px; text-align: center; padding: 3px 4px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 80px;
 }
-.cd-word {
-  position: absolute;
-  font-size: .6rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .3px;
-  text-align: center;
-  color: #333;
-  background: var(--card-bg);
-  border: 1px solid var(--card-border);
-  border-radius: 4px;
-  padding: 2px 4px;
-  max-width: 50px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.board-card .cw-n { grid-column: 2; grid-row: 1; }
+.board-card .cw-s { grid-column: 2; grid-row: 3; }
+.board-card .cw-w { grid-column: 1; grid-row: 2; justify-self: center; }
+.board-card .cw-e { grid-column: 3; grid-row: 2; justify-self: center; }
+.board-card .cw-center {
+  grid-column: 2; grid-row: 2;
+  display: flex; align-items: center; justify-content: center;
 }
-.cd-top    { top: 0; left: 50%; transform: translateX(-50%); }
-.cd-right  { right: 0; top: 50%; transform: translateY(-50%); }
-.cd-bottom { bottom: 0; left: 50%; transform: translateX(-50%); }
-.cd-left   { left: 0; top: 50%; transform: translateY(-50%); }
+.board-card .cw-center-dot {
+  width: 12px; height: 12px; border-radius: 50%; background: var(--green);
+  opacity: 0.3;
+}
 
-/* Hint cell — clue bump between leaves */
-.hint-cell {
+/* Card clickable states */
+.board-card.clickable { cursor: pointer; transition: transform .15s, border-color .15s; }
+.board-card.clickable:hover { transform: scale(1.03); border-color: var(--green-light); }
+.board-card.selected { border-color: var(--green); box-shadow: 0 0 0 3px rgba(76,175,80,.3); }
+.board-card.has-card { cursor: default; }
+.board-card.has-card:hover { transform: none; }
+
+/* Clue zone — at edges between cards */
+.clue-zone {
   background: var(--hint-bg);
   border: 2px solid var(--hint-border);
-  border-radius: 50%;
-  width: 78%;
-  height: 78%;
+  border-radius: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  padding: 5px;
+  gap: 2px;
+  padding: 4px;
+  width: 80%;
+  height: 70%;
 }
-.hint-cell input {
-  width: 100%;
-  border: none;
-  background: transparent;
-  text-align: center;
-  font-weight: 700;
-  font-size: .8rem;
-  text-transform: uppercase;
-  outline: none;
-  color: #333;
+.clue-zone input {
+  width: 100%; border: none; background: transparent; text-align: center;
+  font-weight: 700; font-size: .75rem; text-transform: uppercase; outline: none; color: #333;
 }
-.hint-cell input::placeholder { font-weight:400; text-transform:none; color:#bbb; font-size:.7rem; }
-.hint-cell .hint-words { font-size:.6rem; color:#888; text-align:center; line-height:1.3; }
-.hint-cell .clue-display { font-weight:800; font-size:.85rem; text-transform:uppercase; color:var(--green); letter-spacing:.5px; }
+.clue-zone input::placeholder { font-weight: 400; text-transform: none; color: #bbb; font-size: .65rem; }
+.clue-zone .clue-words { font-size: .55rem; color: #888; text-align: center; line-height: 1.2; }
+.clue-zone .clue-display { font-weight: 800; font-size: .8rem; text-transform: uppercase; color: var(--green); letter-spacing: .5px; }
 
-/* Center dot */
-.clover-center { background:var(--green); border-radius:50%; width:24px; height:24px; }
+/* Center of board */
+.board-center {
+  display: flex; align-items: center; justify-content: center;
+}
+.board-center-dot { width: 20px; height: 20px; border-radius: 50%; background: var(--green); opacity: .4; }
+
+/* Drop target */
+.drop-target { border-color: var(--green-light) !important; background: #f1f8e9 !important; border-style: dashed !important; }
+.drop-target .cw { opacity: .4; }
+
+/* Card controls */
+.card-controls { position: absolute; top: 2px; right: 4px; display: flex; gap: 2px; z-index: 2; }
+.card-btn {
+  font-size: .55rem; cursor: pointer; color: #aaa; background: none; border: none; line-height: 1;
+}
+.card-btn:hover { color: var(--red); }
+.card-btn.flip { color: var(--green); border: 1px solid var(--green); border-radius: 3px; padding: 0 3px; }
 
 /* ── Card pool ── */
 .card-pool {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin: 16px 0;
-  justify-content: center;
+  display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; justify-content: center;
 }
-.word-card {
-  background: var(--card-bg);
-  border: 2px solid var(--card-border);
-  border-radius: 8px;
-  padding: 8px 12px;
-  cursor: pointer;
-  transition: all .15s;
-  text-align: center;
-  min-width: 80px;
+.pool-card {
+  background: var(--card-bg); border: 2px solid var(--card-border); border-radius: 8px;
+  padding: 8px 12px; cursor: pointer; transition: all .15s; text-align: center; min-width: 80px;
+  display: grid; grid-template-rows: auto 1fr auto; grid-template-columns: auto 1fr auto;
+  width: 90px; height: 80px;
 }
-.word-card:hover { transform: scale(1.05); border-color: var(--green-light); }
-.word-card.selected { border-color: var(--green); background: #f1f8e9; box-shadow: 0 0 0 3px rgba(76,175,80,.2); }
-.word-card.placed { opacity:.35; cursor:default; transform:none; }
-.w-top, .w-bottom { font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.3px; }
-.w-mid { font-size:.6rem; color:#aaa; display:flex; justify-content:center; gap:4px; margin:3px 0; }
+.pool-card:hover { transform: scale(1.05); border-color: var(--green-light); }
+.pool-card.selected { border-color: var(--green); background: #f1f8e9; box-shadow: 0 0 0 3px rgba(76,175,80,.2); }
+.pool-card.placed { opacity: .35; cursor: default; transform: none; }
+.pool-card .pw {
+  font-size: .55rem; font-weight: 700; text-transform: uppercase; letter-spacing: .3px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center;
+}
+.pool-card .pw-n { grid-column: 2; grid-row: 1; }
+.pool-card .pw-s { grid-column: 2; grid-row: 3; }
+.pool-card .pw-w { grid-column: 1; grid-row: 2; align-self: center; }
+.pool-card .pw-e { grid-column: 3; grid-row: 2; align-self: center; }
+.pool-card .pw-center { grid-column: 2; grid-row: 2; }
 
 /* ── Sections ── */
-.section-box {
-  background:#fff;
-  border-radius:12px;
-  box-shadow: var(--shadow);
-  padding: 24px;
-  margin-bottom:20px;
-}
+.section-box { background:#fff; border-radius:12px; box-shadow:var(--shadow); padding:24px; margin-bottom:20px; }
 .section-box h3 { font-size:1.1rem; margin-bottom:16px; color:var(--green); }
 
 /* ── Score reveal ── */
-.score-row {
-  display:flex;
-  align-items:center;
-  gap:12px;
-  padding:10px 0;
-  border-bottom:1px solid #eee;
-  font-size:.95rem;
-}
+.score-row { display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid #eee; font-size:.95rem; }
 .score-row:last-child { border-bottom:none; }
 .score-pip { display:flex; gap:3px; }
 .pip { width:14px;height:14px;border-radius:50%;background:#ddd; }
 .pip.correct { background:var(--green-light); }
 
 /* ── Correct arrangement ── */
-.arrange-mini {
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:6px;
-  max-width:240px;
-  margin:0 auto;
-}
+.arrange-mini { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; max-width:240px; margin:0 auto; }
 .am-cell { display:flex; align-items:center; justify-content:center; }
 .am-card {
-  background:var(--card-bg);
-  border:2px solid var(--card-border);
-  border-radius:8px;
-  padding:6px 8px;
-  text-align:center;
-  font-size:.7rem;
-  font-weight:700;
-  text-transform:uppercase;
-  line-height:1.5;
+  background:var(--card-bg); border:2px solid var(--card-border); border-radius:6px;
+  padding:6px 8px; text-align:center; font-size:.6rem; font-weight:700;
+  text-transform:uppercase; line-height:1.4; display:grid;
+  grid-template-rows:auto 1fr auto; grid-template-columns:auto 1fr auto;
+  width:70px; height:65px;
 }
-.am-hint {
-  background:var(--hint-bg);
-  border:2px solid var(--hint-border);
-  border-radius:8px;
-  padding:4px 6px;
-  text-align:center;
-  font-size:.7rem;
-  font-weight:700;
-  text-transform:uppercase;
-  color:var(--green);
+.am-card .am-w {
+  font-size:.5rem; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
+.am-card .am-n { grid-column:2; grid-row:1; }
+.am-card .am-s { grid-column:2; grid-row:3; }
+.am-card .am-w-l { grid-column:1; grid-row:2; align-self:center; }
+.am-card .am-w-r { grid-column:3; grid-row:2; align-self:center; }
+.am-card .am-c { grid-column:2; grid-row:2; font-size:.4rem; color:#aaa; }
+.am-hint { font-size:.7rem; color:#888; }
+.msg-success { color:var(--green); font-weight:600; font-size:.95rem; }
+.msg-waiting { color:#aaa; font-size:.85rem; text-align:center; margin-top:12px; }
+</style>
 
-/* ── Final scoreboard ── */
-.score-board { max-width:400px; margin:0 auto; }
-.sb-row {
-  display:flex;
-  align-items:center;
-  gap:14px;
-  padding:12px 16px;
-  border-bottom:1px solid #eee;
-}
-.sb-rank { font-size:1.4rem; width:30px; text-align:center; }
-.sb-name { font-size:1rem; font-weight:600; flex:1; }
-.sb-score { font-size:1.3rem; font-weight:800; color:var(--green); }
-
-/* ── Responsive ── */
-@media (max-width:700px) {
-  .game-wrap { flex-direction:column; }
-  .sidebar { width:100%; }
-  .clover-wrapper { max-width:100%; }
-  .clover-slot .slot-word { font-size:.6rem; }
-  .hint-cell .clue-display { font-size:.7rem; }
-  .hint-cell input { font-size:.7rem; }
-}
-{% endblock %}
-
-{% block content %}
-<div class="game-wrap">
-  <!-- Sidebar -->
-  <aside class="sidebar">
-    <div class="player-panel">
-      <h4>Players</h4>
-      <div id="playerList"></div>
-    </div>
-    <div id="sidebarExtra"></div>
-  </aside>
-
-  <!-- Main area -->
-  <div class="main-area" id="mainArea">
-    <div class="msg-waiting">Loading…</div>
-  </div>
-</div>
-{% endblock %}
-
-{% block scripts %}
 <script>
-const ROOM_CODE = "{{ room.code }}";
-const MY_ID     = {{ player.id }};
-const IS_HOST   = {{ player.is_host|yesno:"true,false" }};
+const ROOM_CODE = '{{ room_code }}';
+const MY_ID = {{ player_id }};
+const IS_HOST = {{ is_host|yesno:"true,false,false" }};
 
-function escapeHtml(str) {
-  if (!str) return '';
-  return str.replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
-}
+let lastState = null;
+let pollTimer = null;
 
-function escapeJs(str) {
-  if (!str) return '';
-  return str.replace(/\\/g, '\\\\')
-            .replace(/\0/g, '\\0')
-            .replace(/'/g, "\\'")
-            .replace(/"/g, '\\"')
-            .replace(/`/g, '\\`')
-            .replace(/\n/g, '\\n')
-            .replace(/\r/g, '\\r')
-            .replace(/\u2028/g, '\\u2028')
-            .replace(/\u2029/g, '\\u2029')
-            .replace(/\$/g, '\\$');
-}
-
-let lastStatus  = null;
-let lastGuessing = null;  // JSON key to detect change
-let selectedCardIdx = null;  // for click-to-place
-let placedDirty = false;  // track if user has manually modified cards
-
-// ─────────── helpers ───────────────────────────────────────────────────────
+// ─────────── API helper ─────────────────────────────────────────────────────
 async function apiPost(path, body) {
+  const r = await fetch(path, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','X-CSRFToken':getCookie('csrftoken')},
+    body: JSON.stringify(body),
+  });
+  return r.json();
+}
+function getCookie(name) {
+  const v = document.cookie.match('(^|;) ?'+name+'=([^;]*)');
+  return v ? v[2] : null;
+}
+
+function escapeHtml(s) {
+  if (!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─────────── Polling ────────────────────────────────────────────────────────
+async function poll() {
   try {
-    const r = await fetch(path, {
-      method:'POST',
-      headers:{'Content-Type':'application/json','X-CSRFToken':CSRF_TOKEN},
-      body: JSON.stringify(body)
-    });
-    const ct = r.headers.get('content-type') || '';
-    if (ct.includes('json')) return r.json();
-    await r.text();
-    return {success: false, error: `Server error (${r.status})`};
-  } catch {
-    return {success: false, error: 'Network error'};
+    const r = await fetch(`/api/${ROOM_CODE}/state/`);
+    const s = await r.json();
+    lastState = s;
+    render(s);
+  } catch(e) { console.error(e); }
+}
+
+function startPolling() {
+  poll();
+  pollTimer = setInterval(poll, 2000);
+}
+
+// ─────────── Main render ────────────────────────────────────────────────────
+function render(state) {
+  document.getElementById('roomCode').textContent = ROOM_CODE;
+  document.getElementById('playerName').textContent = state.players.find(p=>p.id===MY_ID)?.name || '';
+
+  renderPlayerList(state);
+
+  if (state.error) { renderError(state.error); return; }
+
+  switch(state.phase) {
+    case 'lobby':     renderLobby(state); break;
+    case 'writing':   renderWriting(state); break;
+    case 'guessing':  renderGuessing(state); break;
+    case 'scoring':   renderScoring(state); break;
+    case 'finished':  renderFinished(state); break;
   }
 }
 
-function pips(score, total=4) {
-  return Array.from({length:total},(_,i)=>`<div class="pip ${i<score?'correct':''}"></div>`).join('');
+function renderPlayerList(state) {
+  document.getElementById('playerList').innerHTML = state.players.map(p => `
+    <div class="player-row">
+      <span class="sp-dot ${p.clues_submitted||p.guess_submitted?'done':''}"></span>
+      <span>${escapeHtml(p.name)}${p.id===MY_ID?' (you)':''}${p.is_host?' 👑':''}${p.is_visitor?' 👁':''}</span>
+      <span class="sp-score">${p.score}</span>
+    </div>
+  `).join('');
 }
 
-// ─────────── sidebar ───────────────────────────────────────────────────────
-function renderSidebar(players, status) {
-  const list = document.getElementById('playerList');
-  list.innerHTML = players.map(p => {
-    const isMe = p.id === MY_ID;
-    let indicator = '';
-    if (status==='writing') {
-      indicator = p.clues_submitted ? '✅' : '⌛';
-    } else if (status==='guessing' || status==='scoring') {
-      if (p.guess_submitted===true) indicator = '✅';
-      else if (p.guess_submitted===false && !p.is_host) indicator = '⌛';
-    }
-    const dotClass = (p.clues_submitted || p.guess_submitted) ? 'done' : '';
-    const escapedName = escapeHtml(p.name);
-    const jsEscapedName = escapeJs(p.name);
-    const canKick = IS_HOST && !isMe;
-    const visitorBadge = p.is_visitor ? '<span style="font-size:.65rem;color:#999;margin-left:4px;">(visitor)</span>' : '';
-    return `
-      <div class="sp-item">
-        <div class="sp-dot ${dotClass}"></div>
-        <span style="flex:1;${isMe?'font-weight:700':''}">${escapedName}${visitorBadge}${isMe?' (you)':''}</span>
-        <span class="sp-score" style="margin-right: 6px;">${p.score}</span>
-        ${indicator ? `<span style="font-size:.8rem; margin-right: 6px;">${indicator}</span>` : ''}
-        ${canKick ? `<button onclick="kickPlayer(${p.id}, '${jsEscapedName}')" style="background:none; border:none; color:var(--red); font-weight:bold; cursor:pointer; font-size:1rem; padding: 2px 4px; line-height: 1;">✕</button>` : ''}
-      </div>
-    `;
-  }).join('');
+function renderError(msg) {
+  document.getElementById('mainArea').innerHTML = `<div class="section-box"><h3>Error</h3><p>${escapeHtml(msg)}</p></div>`;
 }
 
-async function kickPlayer(id, name) {
-  if (!confirm(`Are you sure you want to kick ${name}?`)) return;
-  try {
-    const r = await fetch(`/api/${ROOM_CODE}/kick/${id}/`, {
-      method: 'POST',
-      headers: { 'X-CSRFToken': CSRF_TOKEN }
-    });
-    const d = await r.json();
-    if (d.success) poll();
-    else alert(d.error || 'Could not kick player');
-  } catch {
-    alert('Error kicking player');
-  }
+// ─────────── Lobby ──────────────────────────────────────────────────────────
+function renderLobby(state) {
+  document.getElementById('phaseLabel').textContent = '🏠 Lobby';
+  document.getElementById('sidebarExtra').innerHTML = '';
+
+  const canStart = IS_HOST && state.players.length >= 2;
+  document.getElementById('mainArea').innerHTML = `
+    <div class="section-box">
+      <h3>Waiting for players…</h3>
+      <p style="color:#666;margin-bottom:16px;">Need at least 2 players. Share code: <strong>${ROOM_CODE}</strong></p>
+      ${IS_HOST ? `<button class="btn btn-green" onclick="startGame()" ${canStart?'':'disabled'}>Start Game</button>` : '<p class="msg-waiting">Waiting for host to start…</p>'}
+    </div>`;
+}
+
+async function startGame() {
+  const d = await apiPost(`/api/${ROOM_CODE}/start/`, {});
+  if (d.success) poll();
+  else alert(d.error || 'Error');
 }
 
 // ─────────── Writing phase ──────────────────────────────────────────────────
 function renderWriting(state) {
-  const w   = state.writing;
-  document.getElementById('phaseLabel').textContent = '✏️ Writing phase';
+  const w = state.writing;
+  if (!w) return;
 
-  if (w.error) {
-    document.getElementById('mainArea').innerHTML = `<div class="msg-error">${w.error}</div>`;
-    return;
-  }
+  document.getElementById('phaseLabel').textContent = '✏️ Writing clues';
+  if (w.error) { renderError(w.error); return; }
 
   // Visitors see a waiting message
   if (w.visitor) {
@@ -405,17 +329,15 @@ function renderWriting(state) {
   }
 
   const sub = w.submitted;
-
-  // Count how many submitted
   const done = state.players.filter(p=>p.clues_submitted).length;
   document.getElementById('sidebarExtra').innerHTML = `
     <div style="text-align:center;padding:8px;color:#666;font-size:.85rem;">
       ${done} / ${state.players.length} submitted
     </div>`;
 
+  const arrangement = w.arrangement;
   const edges = w.edges;
   const clues = w.clues || {};
-  const arrangement = w.arrangement;
 
   document.getElementById('mainArea').innerHTML = `
     <div class="section-box">
@@ -423,7 +345,7 @@ function renderWriting(state) {
       <p style="color:#666;font-size:.9rem;margin-bottom:16px;">
         Write <strong>one word</strong> at each edge that hints at the <em>two words</em> shown there.
       </p>
-      ${renderCloVer_writing(arrangement, edges, clues, sub)}
+      ${renderBoardWriting(arrangement, edges, clues, sub)}
       ${!sub ? `
         <div style="text-align:center;margin-top:20px;">
           <button class="btn btn-green" onclick="submitClues()">Submit Clues ✔</button>
@@ -435,55 +357,44 @@ function renderWriting(state) {
   `;
 }
 
-function renderCloVer_writing(arrangement, edges, clues, disabled) {
+function renderBoardWriting(arrangement, edges, clues, disabled) {
   const v = (edge, which) => edges[edge] ? edges[edge][which] : '?';
   const inp = (id, edgeKey, val) =>
-    `<div class="hint-cell">
-       <div class="hint-words">${escapeHtml(v(edgeKey,0))}<br>${escapeHtml(v(edgeKey,1))}</div>
+    `<div class="clue-zone">
+       <div class="clue-words">${escapeHtml(v(edgeKey,0))} · ${escapeHtml(v(edgeKey,1))}</div>
        <input id="${id}" type="text" maxlength="25"
               placeholder="your clue…"
               value="${escapeHtml(val)}"
               ${disabled?'disabled':''}>
      </div>`;
 
-  function cardDiamond(pos) {
+  function cardHTML(pos) {
     const c = arrangement[pos];
     const ws = c.words;
-    return `<div class="card-diamond">
-      <div class="cd-word cd-top">${escapeHtml(ws[0])}</div>
-      <div class="cd-word cd-right">${escapeHtml(ws[1])}</div>
-      <div class="cd-word cd-bottom">${escapeHtml(ws[2])}</div>
-      <div class="cd-word cd-left">${escapeHtml(ws[3])}</div>
+    return `<div class="board-card has-card">
+      <div class="cw cw-n">${escapeHtml(ws[0])}</div>
+      <div class="cw cw-e">${escapeHtml(ws[1])}</div>
+      <div class="cw cw-s">${escapeHtml(ws[2])}</div>
+      <div class="cw cw-w">${escapeHtml(ws[3])}</div>
+      <div class="cw-center"><div class="cw-center-dot"></div></div>
     </div>`;
   }
 
   return `
-    <div class="clover-wrapper">
-      <svg class="clover-bg" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
-        <g fill="#4caf50" opacity="0.15">
-          <ellipse cx="130" cy="130" rx="85" ry="85"/>
-          <ellipse cx="270" cy="130" rx="85" ry="85"/>
-          <ellipse cx="130" cy="270" rx="85" ry="85"/>
-          <ellipse cx="270" cy="270" rx="85" ry="85"/>
-        </g>
-      </svg>
-      <div class="clover-grid">
-        <!-- row 0: N clue (full width) -->
-        <div class="cg-cell" style="grid-column:1/-1;">${inp('clue_n','n',clues.n)}</div>
-        <!-- row 1: NW card, empty, NE card -->
-        <div class="cg-cell leaf-nw">${cardDiamond('nw')}</div>
-        <div class="cg-cell"></div>
-        <div class="cg-cell leaf-ne">${cardDiamond('ne')}</div>
-        <!-- row 2: W clue, center, E clue -->
-        <div class="cg-cell">${inp('clue_w','w',clues.w)}</div>
-        <div class="cg-cell"><div class="clover-center"></div></div>
-        <div class="cg-cell">${inp('clue_e','e',clues.e)}</div>
-        <!-- row 3: SW card, empty, SE card -->
-        <div class="cg-cell leaf-sw">${cardDiamond('sw')}</div>
-        <div class="cg-cell"></div>
-        <div class="cg-cell leaf-se">${cardDiamond('se')}</div>
-        <!-- row 4: S clue (full width) -->
-        <div class="cg-cell" style="grid-column:1/-1;">${inp('clue_s','s',clues.s)}</div>
+    <div class="board-wrapper">
+      <div class="board-grid">
+        <!-- row 0 -->
+        <div class="board-cell">${cardHTML('nw')}</div>
+        <div class="board-cell">${inp('clue_n','n',clues.n)}</div>
+        <div class="board-cell">${cardHTML('ne')}</div>
+        <!-- row 1 -->
+        <div class="board-cell">${inp('clue_w','w',clues.w)}</div>
+        <div class="board-cell"><div class="board-center"><div class="board-center-dot"></div></div></div>
+        <div class="board-cell">${inp('clue_e','e',clues.e)}</div>
+        <!-- row 2 -->
+        <div class="board-cell">${cardHTML('sw')}</div>
+        <div class="board-cell">${inp('clue_s','s',clues.s)}</div>
+        <div class="board-cell">${cardHTML('se')}</div>
       </div>
     </div>
   `;
@@ -495,32 +406,28 @@ async function submitClues() {
   if (!clues.n||!clues.e||!clues.s||!clues.w) {
     alert('Please fill in all four clues.'); return;
   }
-  
-  // Find and disable the submit button
-  const submitBtn = document.querySelector('.btn-green[onclick="submitClues()"]');
-  if (submitBtn) {
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Submitting…';
-  }
-  
-  const d = await apiPost(`/api/${ROOM_CODE}/submit-clues/`, clues);
-  if (!d.success) {
-    alert(d.error || 'Error submitting clues');
-    if (submitBtn) {
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Submit Clues ✔';
-    }
-  } else {
-    poll();
+
+  const submitBtn = document.querySelector('.btn-green');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submitting…'; }
+
+  const d = await apiPost(`/api/${ROOM_CODE}/submit-clues/`, { clues });
+  if (d.success) poll();
+  else {
+    alert(d.error || 'Error');
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit Clues ✔'; }
   }
 }
 
 // ─────────── Guessing phase ─────────────────────────────────────────────────
-// State: placed = {n:{idx,flipped?}, e:…, s:…, w:…}
+// State: placed = {nw:{idx,flipped?}, ne:…, sw:…, se:…}
 let placed = {nw:null,ne:null,sw:null,se:null};
+let selectedCardIdx = null;
+let placedDirty = false;
 
 function renderGuessing(state) {
   const g = state.guessing;
+  if (!g) return;
+
   document.getElementById('phaseLabel').textContent =
     `🔍 Guessing — ${g.owner_name}'s clover (${g.clover_index+1}/${g.total_clovers})`;
 
@@ -530,50 +437,19 @@ function renderGuessing(state) {
       <div style="font-weight:700;font-size:1.1rem;">${g.submitted_count} / ${g.total_guessers}</div>
     </div>`;
 
-  if (g.is_owner) {
-    renderOwnerView(g, state);
-    return;
+  if (g.my_guess && !placedDirty) {
+    // Restore previous guess
+    for (const [k,v] of Object.entries(g.my_guess)) {
+      if (v && v.idx !== undefined) placed[k] = {idx: v.idx, flipped: v.flipped || false};
+    }
   }
-  if (g.my_guess?.submitted) {
+
+  if (g.all_submitted) {
     renderWaitingAfterGuess(g);
     return;
   }
-  // Restore placed state from server only if user hasn't modified locally
-  if (!placedDirty) {
-    if (g.my_guess?.arrangement) {
-      placed = JSON.parse(JSON.stringify(g.my_guess.arrangement));
-      // Ensure all positions have flipped key (server may not store it)
-      for (const pos of ['n','e','s','w']) {
-        if (placed[pos]) placed[pos].flipped = placed[pos].flipped || false;
-      }
-    } else {
-      placed = {n:null,e:null,s:null,w:null};
-    }
-  }
-  renderGuesserBoard(g);
-}
 
-function renderOwnerView(g, state) {
-  document.getElementById('mainArea').innerHTML = `
-    <div class="section-box">
-      <h3>🍀 Your clover is being guessed!</h3>
-      <p style="color:#666;margin-bottom:16px;">
-        Sit back and watch — other players are trying to reconstruct your clover.
-      </p>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
-        ${Object.entries(g.clues).map(([k,v])=>`
-          <div>
-            <div style="font-size:.7rem;color:#888;text-transform:uppercase;">${k.toUpperCase()}</div>
-            <div class="hint-chip">${escapeHtml(v)}</div>
-          </div>
-        `).join('')}
-      </div>
-      <div style="text-align:center;color:#888;margin-top:12px;">
-        <strong>${g.submitted_count}</strong> of <strong>${g.total_guessers}</strong> players have submitted their guess.
-      </div>
-      ${g.all_submitted && IS_HOST ? `<div style="text-align:center;margin-top:16px;"><button class="btn btn-gold" onclick="poll()">Reveal Results →</button></div>` : ''}
-    </div>
-  `;
+  renderGuesserBoard(g);
 }
 
 function renderWaitingAfterGuess(g) {
@@ -596,13 +472,6 @@ function cardWord(cardEntry, direction, flipped) {
   return cardEntry.words[actualIdx];
 }
 
-// Derives edge word pair from currently placed cards
-// Cards at nw, ne, sw, se. Clues at n, e, s, w.
-// Each card has words: [top, right, bottom, left]
-// N = NW.word_facing_N + NE.word_facing_N
-// E = NE.word_facing_E + SE.word_facing_E
-// S = SW.word_facing_S + SE.word_facing_S
-// W = NW.word_facing_W + SW.word_facing_W
 function derivedEdge(cards, pos1, dir1, pos2, dir2) {
   const p1 = placed[pos1];
   const p2 = placed[pos2];
@@ -617,7 +486,6 @@ function renderGuesserBoard(g) {
   const clues = g.clues;
   const placedIndices = new Set(Object.values(placed).filter(Boolean).map(p=>p.idx));
 
-  // Derived edge words from current placement
   const edgeN = derivedEdge(cards,'nw','n','ne','n');
   const edgeE = derivedEdge(cards,'ne','e','se','e');
   const edgeS = derivedEdge(cards,'sw','s','se','s');
@@ -626,91 +494,74 @@ function renderGuesserBoard(g) {
   function slotHTML(pos) {
     const p = placed[pos];
     if (!p) {
-      return `<div class="clover-slot drop-target" id="slot-${pos}" onclick="placeCard('${pos}')">
-                <div class="pos-label">${pos.toUpperCase()}</div>
-                <div style="color:#bbb;font-size:.75rem;">Click to place</div>
-              </div>`;
+      return `<div class="board-card drop-target" onclick="placeCard('${pos}')">
+        <div class="cw" style="color:#bbb;font-size:.55rem;grid-column:2;grid-row:2;">Click to place</div>
+      </div>`;
     }
     const card = getCardByIdx(cards, p.idx);
-    const ws = card.words;
-    const flipped = p.flipped;
-    const word = (d) => {
-      const idx = {n:0,e:1,s:2,w:3}[d];
-      return ws[flipped ? (idx+2)%4 : idx];
-    };
-    return `<div class="clover-slot has-card" id="slot-${pos}">
-              <div class="pos-label">${pos.toUpperCase()}</div>
-              <button class="remove-btn" onclick="removeCard('${pos}')">✕</button>
-              <div class="slot-word">${escapeHtml(word('n'))}</div>
-              <div class="slot-divider"></div>
-              <div class="slot-word">${escapeHtml(word('s'))}</div>
-              <button class="flip-btn" onclick="flipCard('${pos}')">⇄ flip</button>
-            </div>`;
+    const word = (d) => cardWord(card, d, p.flipped);
+    return `<div class="board-card has-card">
+      <div class="cw cw-n">${escapeHtml(word('n'))}</div>
+      <div class="cw cw-e">${escapeHtml(word('e'))}</div>
+      <div class="cw cw-s">${escapeHtml(word('s'))}</div>
+      <div class="cw cw-w">${escapeHtml(word('w'))}</div>
+      <div class="cw-center"><div class="cw-center-dot"></div></div>
+      <div class="card-controls">
+        <button class="card-btn" onclick="removeCard('${pos}')">✕</button>
+        <button class="card-btn flip" onclick="flipCard('${pos}')">⇄</button>
+      </div>
+    </div>`;
   }
 
-function hintHTML(edge, clue, w) {
+  function clueHTML(dir, clue, w) {
     const match = w[0]!=='?' && w[1]!=='?';
-    return `<div class="hint-cell" style="${match?'':'opacity:.6'}">
-              <div class="clue-display">${escapeHtml(clue)}</div>
-              <div class="hint-words" style="font-size:.65rem">${escapeHtml(w[0])} · ${escapeHtml(w[1])}</div>
-            </div>`;
-}
+    return `<div class="clue-zone" style="${match?'':'opacity:.6'}">
+      <div class="clue-display">${escapeHtml(clue)}</div>
+      <div class="clue-words">${escapeHtml(w[0])} · ${escapeHtml(w[1])}</div>
+    </div>`;
+  }
 
   const allPlaced = Object.values(placed).every(Boolean);
 
   document.getElementById('mainArea').innerHTML = `
-    <div class="section-box" style="padding:16px;">
+    <div class="section-box">
       <h3>Reconstruct ${escapeHtml(g.owner_name)}'s clover</h3>
       <p style="font-size:.85rem;color:#666;margin-bottom:12px;">
-        Select a card from the pool, then click a clover slot to place it.
-        Use ⇄ flip to swap which word faces which hint.
+        Select a card from the pool, then click a slot to place it.
+        Use ⇄ to rotate a card 180°.
       </p>
       <!-- card pool -->
       <div class="card-pool" id="cardPool">
         ${cards.map(c => {
           const isPlaced = placedIndices.has(c.idx);
-          const isSel    = selectedCardIdx===c.idx;
-          return `<div class="word-card ${isPlaced?'placed':''} ${isSel&&!isPlaced?'selected':''}"
+          const isSel = selectedCardIdx===c.idx;
+          return `<div class="pool-card ${isPlaced?'placed':''} ${isSel&&!isPlaced?'selected':''}"
                        id="pool-card-${c.idx}"
-                       onclick="${isPlaced?'':'selectCard('+c.idx+')'}" >
-                    <div class="w-top">${escapeHtml(c.words[0])}</div>
-                    <div class="w-mid">
-                      <span>${escapeHtml(c.words[3])}</span>
-                      <span>·</span>
-                      <span>${escapeHtml(c.words[1])}</span>
-                    </div>
-                    <div class="w-bottom">${escapeHtml(c.words[2])}</div>
-                  </div>`;
+                       onclick="${isPlaced?'':'selectCard('+c.idx+')'}">
+            <div class="pw pw-n">${escapeHtml(c.words[0])}</div>
+            <div class="pw pw-e">${escapeHtml(c.words[1])}</div>
+            <div class="pw pw-s">${escapeHtml(c.words[2])}</div>
+            <div class="pw pw-w">${escapeHtml(c.words[3])}</div>
+            <div class="pw pw-center"></div>
+          </div>`;
         }).join('')}
       </div>
 
-      <!-- clover board -->
-      <div class="clover-wrapper" style="margin-top:16px;">
-        <svg class="clover-bg" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
-          <g fill="#4caf50" opacity="0.15">
-            <ellipse cx="130" cy="130" rx="85" ry="85"/>
-            <ellipse cx="270" cy="130" rx="85" ry="85"/>
-            <ellipse cx="130" cy="270" rx="85" ry="85"/>
-            <ellipse cx="270" cy="270" rx="85" ry="85"/>
-          </g>
-        </svg>
-        <div class="clover-grid">
-          <!-- row 0: N hint (full width) -->
-          <div class="cg-cell" style="grid-column:1/-1;">${hintHTML('n', clues.n||'?', edgeN)}</div>
-          <!-- row 1: NW card, empty, NE card -->
-          <div class="cg-cell leaf-nw">${slotHTML('nw')}</div>
-          <div class="cg-cell"></div>
-          <div class="cg-cell leaf-ne">${slotHTML('ne')}</div>
-          <!-- row 2: W hint, center, E hint -->
-          <div class="cg-cell">${hintHTML('w', clues.w||'?', edgeW)}</div>
-          <div class="cg-cell"><div class="clover-center"></div></div>
-          <div class="cg-cell">${hintHTML('e', clues.e||'?', edgeE)}</div>
-          <!-- row 3: SW card, empty, SE card -->
-          <div class="cg-cell leaf-sw">${slotHTML('sw')}</div>
-          <div class="cg-cell"></div>
-          <div class="cg-cell leaf-se">${slotHTML('se')}</div>
-          <!-- row 4: S hint (full width) -->
-          <div class="cg-cell" style="grid-column:1/-1;">${hintHTML('s', clues.s||'?', edgeS)}</div>
+      <!-- board -->
+      <div class="board-wrapper">
+        <div class="board-grid">
+          <!-- row 0 -->
+          <div class="board-cell">${slotHTML('nw')}</div>
+          <div class="board-cell">${clueHTML('n', clues.n||'?', edgeN)}</div>
+          <div class="board-cell">${slotHTML('ne')}</div>
+          <!-- row 1 -->
+          <div class="board-cell">${clueHTML('w', clues.w||'?', edgeW)}</div>
+          <div class="board-cell"><div class="board-center"><div class="board-center-dot"></div></div></div>
+          <div class="board-cell">${clueHTML('e', clues.e||'?', edgeE)}</div>
+          <!-- row 2 -->
+          <div class="board-cell">${slotHTML('sw')}</div>
+          <div class="board-cell">${clueHTML('s', clues.s||'?', edgeS)}</div>
+          <div class="board-cell">${slotHTML('se')}</div>
         </div>
       </div>
 
@@ -759,34 +610,27 @@ function flipCard(pos) {
 }
 
 async function submitGuess() {
-  if (Object.values(placed).some(v=>!v)) { alert('Place all 4 cards first.'); return; }
-  const cloverIndex = lastState?.guessing?.clover_index;
-  if (cloverIndex === undefined) { alert('Game state error. Please refresh.'); return; }
-  
-  // Confirm before submitting
-  if (!confirm('Are you sure you want to submit your guess? This cannot be undone.')) {
-    return;
+  const arrangement = {};
+  for (const [k,v] of Object.entries(placed)) {
+    if (v) arrangement[k] = {idx: v.idx, flipped: v.flipped};
   }
-  
-  // Find and disable the submit button
-  const submitBtn = document.querySelector('.btn-green[onclick="submitGuess()"]');
-  if (submitBtn) {
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Submitting…';
-  }
-  
+
+  const submitBtn = document.querySelector('.btn-green');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submitting…'; }
+
   const d = await apiPost(`/api/${ROOM_CODE}/submit-guess/`, {
-    arrangement: placed, clover_index: cloverIndex
+    arrangement,
+    clover_index: lastState.guessing.clover_index,
   });
   if (d.success) {
     alert(`You got ${d.score}/4 correct! 🎉`);
+    placed = {nw:null,ne:null,sw:null,se:null};
+    placedDirty = false;
+    selectedCardIdx = null;
     poll();
   } else {
     alert(d.error || 'Error');
-    if (submitBtn) {
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Submit Guess ✔';
-    }
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit Guess ✔'; }
   }
 }
 
@@ -801,7 +645,6 @@ function renderScoring(state) {
   const edges = sc.correct_edges;
   const clues = g.clues;
 
-  // Mini correct arrangement grid
   function miniCard(pos) {
     const c = arr[pos];
     const ws = c.words;
@@ -810,10 +653,12 @@ function renderScoring(state) {
       const idx = {n:0,e:1,s:2,w:3}[d];
       return ws[flipped ? (idx+2)%4 : idx];
     };
-    return `<div class="am-card" style="font-size:.55rem;">
-      ${escapeHtml(word('n'))} · ${escapeHtml(word('e'))}<br>
-      <span style="color:#aaa">——</span><br>
-      ${escapeHtml(word('s'))} · ${escapeHtml(word('w'))}
+    return `<div class="am-card">
+      <div class="am-w am-n">${escapeHtml(word('n'))}</div>
+      <div class="am-w am-w-r">${escapeHtml(word('e'))}</div>
+      <div class="am-w am-s">${escapeHtml(word('s'))}</div>
+      <div class="am-w am-w-l">${escapeHtml(word('w'))}</div>
+      <div class="am-c">·</div>
     </div>`;
   }
 
@@ -822,7 +667,7 @@ function renderScoring(state) {
       <h3>Results for ${escapeHtml(g.owner_name)}'s Clover 🍀</h3>
 
       <div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:24px;">
-        <!-- correct arrangement mini board -->
+        <!-- correct arrangement -->
         <div style="flex:1;min-width:200px;">
           <div style="font-size:.85rem;color:#888;margin-bottom:8px;font-weight:600;">CORRECT ARRANGEMENT</div>
           <div class="arrange-mini">
@@ -831,7 +676,7 @@ function renderScoring(state) {
             <div class="am-cell"></div>
 
             <div class="am-cell">${miniCard('sw')}</div>
-            <div class="am-cell"><div class="clover-center"></div></div>
+            <div class="am-cell"><div class="board-center-dot"></div></div>
             <div class="am-cell">${miniCard('se')}</div>
 
             <div class="am-cell"></div>
@@ -845,7 +690,7 @@ function renderScoring(state) {
           <div style="font-size:.85rem;color:#888;margin-bottom:8px;font-weight:600;">CLUES</div>
           ${['n','e','s','w'].map(e=>`
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-              <span class="hint-chip" style="min-width:70px;text-align:center;">${escapeHtml(clues[e]||'?')}</span>
+              <span style="background:var(--hint-bg);border:1px solid var(--hint-border);border-radius:6px;padding:3px 10px;font-weight:700;font-size:.8rem;text-transform:uppercase;min-width:50px;text-align:center;">${escapeHtml(clues[e]||'?')}</span>
               <span style="font-size:.8rem;color:#888">${edges[e]?edges[e].map(w=>escapeHtml(w)).join(' · '):'?'}</span>
             </div>
           `).join('')}
@@ -854,7 +699,7 @@ function renderScoring(state) {
 
       <!-- guesses -->
       <div style="font-size:.85rem;color:#888;margin-bottom:8px;font-weight:600;">PLAYER SCORES</div>
-      ${sc.all_guesses.map(g=>` 
+      ${sc.all_guesses.map(g=>`
         <div class="score-row">
           <div style="font-weight:600;flex:1">${escapeHtml(g.guesser_name)}${g.guesser_id===MY_ID?' (you)':''}</div>
           <div class="score-pip">${pips(g.score)}</div>
@@ -874,6 +719,10 @@ function renderScoring(state) {
   `;
 }
 
+function pips(score) {
+  return [0,1,2,3,4].map(i => `<span class="pip ${i<score?'correct':''}"></span>`).join('');
+}
+
 async function nextClover() {
   const d = await apiPost(`/api/${ROOM_CODE}/next-clover/`, {});
   if (d.success) poll();
@@ -882,107 +731,42 @@ async function nextClover() {
 
 // ─────────── Finished ───────────────────────────────────────────────────────
 function renderFinished(state) {
-  document.getElementById('phaseLabel').textContent = '🏆 Game Over!';
+  document.getElementById('phaseLabel').textContent = '🏆 Game Over';
   document.getElementById('sidebarExtra').innerHTML = '';
 
-  const scores = state.final_scores || [];
-  const medals = ['🥇','🥈','🥉'];
+  const scores = state.final_scores;
+  const maxScore = scores.length > 0 ? scores[0].score : 0;
 
   document.getElementById('mainArea').innerHTML = `
-    <div class="section-box" style="text-align:center;">
-      <h2 style="font-size:2rem;margin-bottom:4px;">Game Over! 🍀</h2>
-      <p style="color:#888;margin-bottom:24px;">Final Scores</p>
-      <div class="score-board">
-        ${scores.map((p,i)=>`
-          <div class="sb-row" style="${p.id===MY_ID?'font-weight:700':''}">
-            <div class="sb-rank">${medals[i]||'  '}</div>
-            <div class="sb-name">${escapeHtml(p.name)}${p.id===MY_ID?' (you)':''}</div>
-            <div class="sb-score">${p.score}</div>
-          </div>
-        `).join('')}
-      </div>
-      <a href="/" class="btn btn-green" style="margin-top:28px;text-decoration:none;display:inline-block;">
-        Play Again
-      </a>
+    <div class="section-box">
+      <h3>Final Scores 🏆</h3>
+      ${scores.map((s,i) => `
+        <div class="score-row" style="${s.id===MY_ID?'background:#f1f8e9;border-radius:8px;padding:10px 12px;':''}">
+          <div style="font-weight:700;font-size:1.1rem;min-width:30px;color:#888;">#${i+1}</div>
+          <div style="font-weight:600;flex:1;font-size:1.05rem;">${escapeHtml(s.name)}${s.id===MY_ID?' (you)':''}</div>
+          <div style="font-weight:800;font-size:1.3rem;color:var(--green);">${s.score}</div>
+        </div>
+      `).join('')}
+
+      ${IS_HOST ? `
+        <div style="text-align:center;margin-top:24px;">
+          <button class="btn btn-gold" onclick="window.location.reload()">🔄 New Game</button>
+        </div>` : `
+        <div class="msg-waiting">Waiting for host to start a new game…</div>`
+      }
     </div>
   `;
 }
 
-// ─────────── Main poll loop ─────────────────────────────────────────────────
-let lastState = null;
-let pollInterval = null;
-let pollInFlight = false;
-let consecutiveErrors = 0;
-const BASE_POLL_INTERVAL = 2500;
-const MAX_POLL_INTERVAL = 10000;
-
-function scheduleNextPoll() {
-  if (pollInterval) clearInterval(pollInterval);
-  const delay = Math.min(BASE_POLL_INTERVAL * Math.pow(1.5, consecutiveErrors), MAX_POLL_INTERVAL);
-  pollInterval = setInterval(poll, delay);
+// ─────────── Kick ───────────────────────────────────────────────────────────
+async function kickPlayer(id) {
+  if (!confirm('Kick this player?')) return;
+  const d = await apiPost(`/api/${ROOM_CODE}/kick/`, {player_id: id});
+  if (!d.success) alert(d.error || 'Error');
+  else poll();
 }
 
-async function poll() {
-  if (pollInFlight) return;  // Don't stack polls
-  pollInFlight = true;
-  
-  let state;
-  try {
-    const r = await fetch(`/api/${ROOM_CODE}/state/`);
-    const ct = r.headers.get('content-type') || '';
-    if (!ct.includes('json')) { pollInFlight = false; consecutiveErrors++; scheduleNextPoll(); return; }
-    state = await r.json();
-    consecutiveErrors = 0;  // Reset on success
-  } catch {
-    pollInFlight = false;
-    consecutiveErrors++;
-    scheduleNextPoll();
-    return;
-  }
-  if (state.error) { pollInFlight = false; consecutiveErrors++; scheduleNextPoll(); return; }
-
-  lastState = state;
-  if (state.players) renderSidebar(state.players, state.status);
-
-  const key = state.status + (state.guessing?.clover_index??'');
-  const changed = key !== lastGuessing;
-  lastGuessing = key;
-
-  // Reset placed state when advancing to next clover
-  if (changed && state.status === 'guessing') {
-    placed = {n:null,e:null,s:null,w:null};
-    selectedCardIdx = null;
-    placedDirty = false;
-  }
-
-  if (state.status === 'writing')  renderWriting(state);
-  else if (state.status === 'guessing') renderGuessing(state);
-  else if (state.status === 'scoring')  renderScoring(state);
-  else if (state.status === 'finished') {
-    renderFinished(state);
-    // Stop polling when game is finished
-    if (pollInterval) {
-      clearInterval(pollInterval);
-      pollInterval = null;
-    }
-  }
-  
-  pollInFlight = false;
-}
-
-window.addEventListener('beforeunload', (e) => {
-  if (lastState) {
-    const isWritingActive = lastState.status === 'writing' && lastState.writing && !lastState.writing.submitted;
-    const isGuessingActive = lastState.status === 'guessing' && lastState.guessing && !lastState.guessing.is_owner && (!lastState.guessing.my_guess || !lastState.guessing.my_guess.submitted);
-    if (isWritingActive || isGuessingActive) {
-      e.preventDefault();
-      e.returnValue = 'Are you sure you want to leave the game? Your unsubmitted clues/guesses will be lost.';
-      return e.returnValue;
-    }
-  }
-});
-
-poll();
-scheduleNextPoll();
+// ─────────── Init ───────────────────────────────────────────────────────────
+startPolling();
 </script>
 {% endblock %}
