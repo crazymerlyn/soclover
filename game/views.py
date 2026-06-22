@@ -270,6 +270,8 @@ def get_state(request, code):
                     next_host.save(update_fields=['is_host'])
                     if player.id == next_host.id:
                         player.is_host = True
+                    # Re-fetch player to ensure consistency
+                    player.refresh_from_db()
     else:
         # Re-fetch host inside transaction to get fresh last_active
         with transaction.atomic():
