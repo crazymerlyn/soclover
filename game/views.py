@@ -21,16 +21,15 @@ _csprng = secrets.SystemRandom()
 
 
 def ensure_session(request):
-    if not request.session.session_key:
-        try:
-            request.session.create()
-        except Exception:
-            pass
-    return request.session.session_key or secrets.token_hex(16)
+    sk = request.session.get('_player_id')
+    if not sk:
+        sk = secrets.token_hex(16)
+        request.session['_player_id'] = sk
+    return sk
 
 
 def get_player(request, room):
-    sk = request.session.session_key
+    sk = request.session.get('_player_id')
     if not sk:
         return None
     return Player.objects.filter(room=room, session_key=sk).first()
