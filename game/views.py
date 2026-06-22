@@ -1,5 +1,5 @@
 import json
-import random
+import secrets
 import datetime
 
 from django.db import transaction
@@ -12,6 +12,9 @@ from django.db.models import Max
 
 from .models import MAX_PLAYERS, HOST_TIMEOUT_SECONDS, Room, Player, Clover, Guess, create_room_with_retry
 from .words import WORD_CARDS
+
+# Cryptographically secure random number generator
+_csprng = secrets.SystemRandom()
 
 
 # ─────────────────────────── helpers ────────────────────────────────────────
@@ -218,7 +221,7 @@ def start_game(request, code):
 
         # Assign 4 unique cards to each player (unique across the room for variety)
         all_indices = list(range(len(WORD_CARDS)))
-        random.shuffle(all_indices)
+        _csprng.shuffle(all_indices)
         used = 0
 
         for p in players:
@@ -228,7 +231,7 @@ def start_game(request, code):
             for pos, idx in zip(["n", "e", "s", "w"], chosen):
                 arrangement[pos] = {
                     "words": list(WORD_CARDS[idx]),
-                    "flipped": random.choice([True, False]),
+                    "flipped": _csprng.choice([True, False]),
                     "card_idx": idx,
                 }
             Clover.objects.create(
@@ -449,10 +452,10 @@ def submit_clues(request, code):
         available = [i for i in range(len(WORD_CARDS)) if i not in used_indices]
         if len(available) < 2:
             return JsonResponse({"error": "Not enough word cards available."}, status=500)
-        herrings = random.sample(available, 2)
+        herrings = _csprng.sample(available, 2)
         for hi in herrings:
             real_cards.append({"idx": hi, "words": list(WORD_CARDS[hi])})
-        random.shuffle(real_cards)
+        _csprng.shuffle(real_cards)
         clover.data["cards"] = real_cards
         clover.clues_submitted = True
         clover.save()
