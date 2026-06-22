@@ -620,6 +620,16 @@ def kick_player(request, code, player_id):
         except ValueError:
             return JsonResponse({"error": "Player not found."}, status=404)
 
+        # Fetch clover and guesses BEFORE deleting player (cascade deletes them)
+        kicked_clover = None
+        kicked_guesses_qs = None
+        if room.status in (Room.STATUS_GUESSING, Room.STATUS_SCORING):
+            try:
+                kicked_clover = player_to_kick.clover
+                kicked_guesses_qs = Guess.objects.filter(clover=kicked_clover)
+            except Clover.DoesNotExist:
+                pass
+
         player_to_kick.delete()
 
         remaining_players = list(room.players.order_by("order"))
@@ -643,15 +653,11 @@ def kick_player(request, code, player_id):
 
         elif room.status in (Room.STATUS_GUESSING, Room.STATUS_SCORING):
             if room.current_clover_index == kicked_idx:
-                # Current clover owner was kicked - need to handle gracefully
-                # Delete all guesses for this clover
-                try:
-                    current_owner = ordered_players[kicked_idx]
-                    current_clover = current_owner.clover
-                    Guess.objects.filter(clover=current_clover).delete()
-                    current_clover.delete()
-                except (AttributeError, Clover.DoesNotExist):
-                    pass
+                # Current clover owner was kicked - clean up their clover and guesses
+                if kicked_guesses_qs is not None:
+                    kicked_guesses_qs.delete()
+                if kicked_clover is not None:
+                    kicked_clover.delete()
                 
                 # Adjust index and check if we should finish
                 if room.current_clover_index >= len(remaining_players):
