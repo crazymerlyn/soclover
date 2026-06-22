@@ -137,28 +137,32 @@ def home(request):
                     # Upsert player for this session with proper ordering
                     with transaction.atomic():
                         locked_room = Room.objects.select_for_update().get(id=room.id)
-                        # Check if player with same name exists (rejoin after session rotation)
-                        existing = locked_room.players.filter(name__iexact=player_name).first()
-                        if existing:
-                            # Update session key for existing player
-                            existing.session_key = sk
-                            existing.save(update_fields=['session_key'])
-                            player = existing
+                        # Check if player with same name already exists in this room
+                        existing_by_name = locked_room.players.filter(name__iexact=player_name).first()
+                        if existing_by_name and existing_by_name.session_key != sk:
+                            # Different session trying to use same name — reject
+                            error = "That name is already taken in this room. Please choose another name."
                         else:
-                            # Use Max aggregate to get safe order value
-                            max_order = locked_room.players.aggregate(
-                                max_order=Max('order')
-                            )['max_order'] or 0
-                            player, created = Player.objects.get_or_create(
-                                room=locked_room,
-                                session_key=sk,
-                                defaults={
-                                    "name": player_name,
-                                    "is_host": False,
-                                    "order": max_order + 1,
-                                },
-                            )
-                    return redirect("lobby", code=room.code)
+                            if existing_by_name:
+                                # Same session rejoining (session rotation) — update session key
+                                existing_by_name.session_key = sk
+                                existing_by_name.save(update_fields=['session_key'])
+                                player = existing_by_name
+                            else:
+                                # New player
+                                max_order = locked_room.players.aggregate(
+                                    max_order=Max('order')
+                                )['max_order'] or 0
+                                player, created = Player.objects.get_or_create(
+                                    room=locked_room,
+                                    session_key=sk,
+                                    defaults={
+                                        "name": player_name,
+                                        "is_host": False,
+                                        "order": max_order + 1,
+                                    },
+                                )
+                            return redirect("lobby", code=room.code)
 
     code_preset = request.GET.get("code", "").strip().upper()
     return render(request, "game/home.html", {
@@ -329,60 +333,63 @@ def get_state(request, code):
     # ── Guessing / Scoring phase ────────────────────────────────────────────
     elif room.status in (Room.STATUS_GUESSING, Room.STATUS_SCORING):
         ordered = list(room.players.order_by("order"))
-        idx = room.current_clover_index
-        if idx >= len(ordered):
-            idx = 0
+        if not ordered:
+            state["guessing"] = {"error": "No players in room."}
+        else:
+            idx = room.current_clover_index
+            if idx >= len(ordered):
+                idx = 0
 
-        owner = ordered[idx]
-        try:
-            clover = owner.clover
-        except AttributeError:
-            return JsonResponse({"error": "Game state error."}, status=500)
-        is_owner = player.id == owner.id
+            owner = ordered[idx]
+            try:
+                clover = owner.clover
+            except AttributeError:
+                return JsonResponse({"error": "Game state error."}, status=500)
+            is_owner = player.id == owner.id
 
-        submitted_count = Guess.objects.filter(clover=clover, submitted=True).count()
-        total_guessers = len(ordered) - 1
+            submitted_count = Guess.objects.filter(clover=clover, submitted=True).count()
+            total_guessers = len(ordered) - 1
 
-        my_guess_data = None
-        if not is_owner:
-            g = Guess.objects.filter(guesser=player, clover=clover).first()
-            if g:
-                my_guess_data = {
-                    "arrangement": g.data,
-                    "submitted": g.submitted,
-                    "score": g.score,
-                }
-
-        include_guess_submitted = clover
-        state["guessing"] = {
-            "owner_name": owner.name,
-            "owner_id": owner.id,
-            "is_owner": is_owner,
-            "clues": clover.data.get("clues", {}),
-            "cards": clover.data.get("cards", []) if not is_owner else [],
-            "submitted_count": submitted_count,
-            "total_guessers": total_guessers,
-            "all_submitted": submitted_count >= total_guessers,
-            "clover_index": idx,
-            "total_clovers": len(ordered),
-            "my_guess": my_guess_data,
-        }
-
-        if room.status == Room.STATUS_SCORING:
-            arr = clover.data["arrangement"]
-            edges = get_edge_words(arr)
-            guesses_info = []
-            for g in Guess.objects.filter(clover=clover, submitted=True).select_related(
-                "guesser"
-            ):
-                guesses_info.append(
-                    {
-                        "guesser_name": g.guesser.name,
-                        "guesser_id": g.guesser.id,
-                        "score": g.score,
+            my_guess_data = None
+            if not is_owner:
+                g = Guess.objects.filter(guesser=player, clover=clover).first()
+                if g:
+                    my_guess_data = {
                         "arrangement": g.data,
+                        "submitted": g.submitted,
+                        "score": g.score,
                     }
-                )
+
+            include_guess_submitted = clover
+            state["guessing"] = {
+                "owner_name": owner.name,
+                "owner_id": owner.id,
+                "is_owner": is_owner,
+                "clues": clover.data.get("clues", {}),
+                "cards": clover.data.get("cards", []) if not is_owner else [],
+                "submitted_count": submitted_count,
+                "total_guessers": total_guessers,
+                "all_submitted": submitted_count >= total_guessers,
+                "clover_index": idx,
+                "total_clovers": len(ordered),
+                "my_guess": my_guess_data,
+            }
+
+            if room.status == Room.STATUS_SCORING:
+                arr = clover.data["arrangement"]
+                edges = get_edge_words(arr)
+                guesses_info = []
+                for g in Guess.objects.filter(clover=clover, submitted=True).select_related(
+                    "guesser"
+                ):
+                    guesses_info.append(
+                        {
+                            "guesser_name": g.guesser.name,
+                            "guesser_id": g.guesser.id,
+                            "score": g.score,
+                            "arrangement": g.data,
+                        }
+                    )
             state["scoring"] = {
                 "correct_arrangement": arr,
                 "correct_edges": edges,
