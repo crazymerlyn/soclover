@@ -100,6 +100,34 @@
 .clover-grid .leaf-sw { align-self: end;   justify-self: start; padding: 8px; }
 .clover-grid .leaf-se { align-self: end;   justify-self: end; padding: 8px; }
 
+/* Card diamond — shows all 4 words on a card */
+.card-diamond {
+  position: relative;
+  width: 90px;
+  height: 90px;
+}
+.cd-word {
+  position: absolute;
+  font-size: .6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  text-align: center;
+  color: #333;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  padding: 2px 4px;
+  max-width: 50px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cd-top    { top: 0; left: 50%; transform: translateX(-50%); }
+.cd-right  { right: 0; top: 50%; transform: translateY(-50%); }
+.cd-bottom { bottom: 0; left: 50%; transform: translateX(-50%); }
+.cd-left   { left: 0; top: 50%; transform: translateY(-50%); }
+
 /* Hint cell — clue bump between leaves */
 .hint-cell {
   background: var(--hint-bg);
@@ -140,6 +168,21 @@
   margin: 16px 0;
   justify-content: center;
 }
+.word-card {
+  background: var(--card-bg);
+  border: 2px solid var(--card-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: all .15s;
+  text-align: center;
+  min-width: 80px;
+}
+.word-card:hover { transform: scale(1.05); border-color: var(--green-light); }
+.word-card.selected { border-color: var(--green); background: #f1f8e9; box-shadow: 0 0 0 3px rgba(76,175,80,.2); }
+.word-card.placed { opacity:.35; cursor:default; transform:none; }
+.w-top, .w-bottom { font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.3px; }
+.w-mid { font-size:.6rem; color:#aaa; display:flex; justify-content:center; gap:4px; margin:3px 0; }
 
 /* ── Sections ── */
 .section-box {
@@ -372,14 +415,15 @@ function renderWriting(state) {
 
   const edges = w.edges;
   const clues = w.clues || {};
+  const arrangement = w.arrangement;
 
   document.getElementById('mainArea').innerHTML = `
     <div class="section-box">
       <h3>Your Clover 🍀</h3>
       <p style="color:#666;font-size:.9rem;margin-bottom:16px;">
-        Write <strong>one word</strong> at each corner that hints at <em>both</em> words shown there.
+        Write <strong>one word</strong> at each edge that hints at the <em>two words</em> shown there.
       </p>
-      ${renderCloVer_writing(edges, clues, sub)}
+      ${renderCloVer_writing(arrangement, edges, clues, sub)}
       ${!sub ? `
         <div style="text-align:center;margin-top:20px;">
           <button class="btn btn-green" onclick="submitClues()">Submit Clues ✔</button>
@@ -391,7 +435,7 @@ function renderWriting(state) {
   `;
 }
 
-function renderCloVer_writing(edges, clues, disabled) {
+function renderCloVer_writing(arrangement, edges, clues, disabled) {
   const v = (edge, which) => edges[edge] ? edges[edge][which] : '?';
   const inp = (id, edgeKey, val) =>
     `<div class="hint-cell">
@@ -402,64 +446,43 @@ function renderCloVer_writing(edges, clues, disabled) {
               ${disabled?'disabled':''}>
      </div>`;
 
+  function cardDiamond(pos) {
+    const c = arrangement[pos];
+    const ws = c.words;
+    return `<div class="card-diamond">
+      <div class="cd-word cd-top">${escapeHtml(ws[0])}</div>
+      <div class="cd-word cd-right">${escapeHtml(ws[1])}</div>
+      <div class="cd-word cd-bottom">${escapeHtml(ws[2])}</div>
+      <div class="cd-word cd-left">${escapeHtml(ws[3])}</div>
+    </div>`;
+  }
+
   return `
     <div class="clover-wrapper">
       <svg class="clover-bg" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
         <g fill="#4caf50" opacity="0.15">
-          <!-- NW leaf -->
           <ellipse cx="130" cy="130" rx="85" ry="85"/>
-          <!-- NE leaf -->
           <ellipse cx="270" cy="130" rx="85" ry="85"/>
-          <!-- SW leaf -->
           <ellipse cx="130" cy="270" rx="85" ry="85"/>
-          <!-- SE leaf -->
           <ellipse cx="270" cy="270" rx="85" ry="85"/>
         </g>
       </svg>
       <div class="clover-grid">
-        <!-- row 0: N clue, empty, empty -->
+        <!-- row 0: N clue (full width) -->
         <div class="cg-cell" style="grid-column:1/-1;">${inp('clue_n','n',clues.n)}</div>
         <!-- row 1: NW card, empty, NE card -->
-        <div class="cg-cell leaf-nw">
-          <div class="clover-slot has-card" style="cursor:default;">
-            <div class="pos-label">NW</div>
-            <div class="slot-word">${escapeHtml(v('n',0))}</div>
-            <div class="slot-divider"></div>
-            <div class="slot-word">${escapeHtml(v('w',0))}</div>
-          </div>
-        </div>
+        <div class="cg-cell leaf-nw">${cardDiamond('nw')}</div>
         <div class="cg-cell"></div>
-        <div class="cg-cell leaf-ne">
-          <div class="clover-slot has-card" style="cursor:default;">
-            <div class="pos-label">NE</div>
-            <div class="slot-word">${escapeHtml(v('n',1))}</div>
-            <div class="slot-divider"></div>
-            <div class="slot-word">${escapeHtml(v('e',0))}</div>
-          </div>
-        </div>
+        <div class="cg-cell leaf-ne">${cardDiamond('ne')}</div>
         <!-- row 2: W clue, center, E clue -->
         <div class="cg-cell">${inp('clue_w','w',clues.w)}</div>
         <div class="cg-cell"><div class="clover-center"></div></div>
         <div class="cg-cell">${inp('clue_e','e',clues.e)}</div>
         <!-- row 3: SW card, empty, SE card -->
-        <div class="cg-cell leaf-sw">
-          <div class="clover-slot has-card" style="cursor:default;">
-            <div class="pos-label">SW</div>
-            <div class="slot-word">${escapeHtml(v('s',0))}</div>
-            <div class="slot-divider"></div>
-            <div class="slot-word">${escapeHtml(v('w',1))}</div>
-          </div>
-        </div>
+        <div class="cg-cell leaf-sw">${cardDiamond('sw')}</div>
         <div class="cg-cell"></div>
-        <div class="cg-cell leaf-se">
-          <div class="clover-slot has-card" style="cursor:default;">
-            <div class="pos-label">SE</div>
-            <div class="slot-word">${escapeHtml(v('s',1))}</div>
-            <div class="slot-divider"></div>
-            <div class="slot-word">${escapeHtml(v('e',1))}</div>
-          </div>
-        </div>
-        <!-- row 4: S clue, empty, empty -->
+        <div class="cg-cell leaf-se">${cardDiamond('se')}</div>
+        <!-- row 4: S clue (full width) -->
         <div class="cg-cell" style="grid-column:1/-1;">${inp('clue_s','s',clues.s)}</div>
       </div>
     </div>
@@ -566,26 +589,27 @@ function getCardByIdx(cards, idx) {
   return cards.find(c=>c.idx===idx) || null;
 }
 
-function cardWords(cardEntry, flipped) {
-  if (!cardEntry) return ['?','?'];
-  return flipped ? [cardEntry.words[1], cardEntry.words[0]] : [cardEntry.words[0], cardEntry.words[1]];
+function cardWord(cardEntry, direction, flipped) {
+  if (!cardEntry) return '?';
+  const idx = {n:0, e:1, s:2, w:3}[direction];
+  const actualIdx = flipped ? (idx + 2) % 4 : idx;
+  return cardEntry.words[actualIdx];
 }
 
 // Derives edge word pair from currently placed cards
 // Cards at nw, ne, sw, se. Clues at n, e, s, w.
-// N = nw.primary(0) + ne.primary(0)
-// E = ne.secondary(1) + se.secondary(1)
-// S = sw.primary(0) + se.primary(0)
-// W = nw.secondary(1) + sw.secondary(1)
-function derivedEdge(cards, pos1, w1idx, pos2, w2idx) {
+// Each card has words: [top, right, bottom, left]
+// N = NW.word_facing_N + NE.word_facing_N
+// E = NE.word_facing_E + SE.word_facing_E
+// S = SW.word_facing_S + SE.word_facing_S
+// W = NW.word_facing_W + SW.word_facing_W
+function derivedEdge(cards, pos1, dir1, pos2, dir2) {
   const p1 = placed[pos1];
   const p2 = placed[pos2];
   if (!p1 || !p2) return ['?','?'];
   const c1 = getCardByIdx(cards, p1.idx);
   const c2 = getCardByIdx(cards, p2.idx);
-  const w1 = cardWords(c1, p1.flipped)[w1idx];
-  const w2 = cardWords(c2, p2.flipped)[w2idx];
-  return [w1, w2];
+  return [cardWord(c1, dir1, p1.flipped), cardWord(c2, dir2, p2.flipped)];
 }
 
 function renderGuesserBoard(g) {
@@ -594,10 +618,10 @@ function renderGuesserBoard(g) {
   const placedIndices = new Set(Object.values(placed).filter(Boolean).map(p=>p.idx));
 
   // Derived edge words from current placement
-  const edgeN = derivedEdge(cards,'nw',0,'ne',0);
-  const edgeE = derivedEdge(cards,'ne',1,'se',1);
-  const edgeS = derivedEdge(cards,'sw',0,'se',0);
-  const edgeW = derivedEdge(cards,'nw',1,'sw',1);
+  const edgeN = derivedEdge(cards,'nw','n','ne','n');
+  const edgeE = derivedEdge(cards,'ne','e','se','e');
+  const edgeS = derivedEdge(cards,'sw','s','se','s');
+  const edgeW = derivedEdge(cards,'nw','w','sw','w');
 
   function slotHTML(pos) {
     const p = placed[pos];
@@ -608,13 +632,18 @@ function renderGuesserBoard(g) {
               </div>`;
     }
     const card = getCardByIdx(cards, p.idx);
-    const ws   = cardWords(card, p.flipped);
+    const ws = card.words;
+    const flipped = p.flipped;
+    const word = (d) => {
+      const idx = {n:0,e:1,s:2,w:3}[d];
+      return ws[flipped ? (idx+2)%4 : idx];
+    };
     return `<div class="clover-slot has-card" id="slot-${pos}">
               <div class="pos-label">${pos.toUpperCase()}</div>
               <button class="remove-btn" onclick="removeCard('${pos}')">✕</button>
-              <div class="slot-word">${escapeHtml(ws[0])}</div>
+              <div class="slot-word">${escapeHtml(word('n'))}</div>
               <div class="slot-divider"></div>
-              <div class="slot-word">${escapeHtml(ws[1])}</div>
+              <div class="slot-word">${escapeHtml(word('s'))}</div>
               <button class="flip-btn" onclick="flipCard('${pos}')">⇄ flip</button>
             </div>`;
   }
@@ -645,8 +674,12 @@ function hintHTML(edge, clue, w) {
                        id="pool-card-${c.idx}"
                        onclick="${isPlaced?'':'selectCard('+c.idx+')'}" >
                     <div class="w-top">${escapeHtml(c.words[0])}</div>
-                    <div class="w-divider"></div>
-                    <div class="w-bottom">${escapeHtml(c.words[1])}</div>
+                    <div class="w-mid">
+                      <span>${escapeHtml(c.words[3])}</span>
+                      <span>·</span>
+                      <span>${escapeHtml(c.words[1])}</span>
+                    </div>
+                    <div class="w-bottom">${escapeHtml(c.words[2])}</div>
                   </div>`;
         }).join('')}
       </div>
@@ -771,8 +804,17 @@ function renderScoring(state) {
   // Mini correct arrangement grid
   function miniCard(pos) {
     const c = arr[pos];
-    const ws = c.flipped ? [c.words[1],c.words[0]] : c.words;
-    return `<div class="am-card">${escapeHtml(ws[0])}<br><span style="color:#aaa">——</span><br>${escapeHtml(ws[1])}</div>`;
+    const ws = c.words;
+    const flipped = c.flipped;
+    const word = (d) => {
+      const idx = {n:0,e:1,s:2,w:3}[d];
+      return ws[flipped ? (idx+2)%4 : idx];
+    };
+    return `<div class="am-card" style="font-size:.55rem;">
+      ${escapeHtml(word('n'))} · ${escapeHtml(word('e'))}<br>
+      <span style="color:#aaa">——</span><br>
+      ${escapeHtml(word('s'))} · ${escapeHtml(word('w'))}
+    </div>`;
   }
 
   document.getElementById('mainArea').innerHTML = `

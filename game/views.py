@@ -42,37 +42,35 @@ def get_room_or_json404(code):
         raise Http404("Room not found.")
 
 
-def primary(card_entry):
-    """The word that faces the clockwise-adjacent edge."""
+def word_at(card_entry, direction):
+    """Get the word on a card that faces a given direction (n, e, s, w).
+    words[0]=top, words[1]=right, words[2]=bottom, words[3]=left.
+    When flipped 180°, top<->bottom and left<->right.
+    """
     w = card_entry["words"]
-    return w[1] if card_entry.get("flipped") else w[0]
-
-
-def secondary(card_entry):
-    """The word that faces the counter-clockwise-adjacent edge."""
-    w = card_entry["words"]
-    return w[0] if card_entry.get("flipped") else w[1]
+    idx = {"n": 0, "e": 1, "s": 2, "w": 3}[direction]
+    if card_entry.get("flipped"):
+        idx = (idx + 2) % 4
+    return w[idx]
 
 
 def get_edge_words(arrangement):
     """
     Cards are placed at NW, NE, SW, SE (2x2 grid).
-    Clue zones are at N, E, S, W (cardinal positions).
+    Each card has 4 words: [top, right, bottom, left].
+    Clue zones are at N, E, S, W.
 
-    For each card, primary faces outward (N for top cards, S for bottom),
-    secondary faces outward (W for left cards, E for right).
-
-    N = NW.primary + NE.primary  (both words visible at top edge)
-    E = NE.secondary + SE.secondary  (both words visible at right edge)
-    S = SW.primary + SE.primary  (both words visible at bottom edge)
-    W = NW.secondary + SW.secondary  (both words visible at left edge)
+    N = NW.word_facing_N + NE.word_facing_N
+    E = NE.word_facing_E + SE.word_facing_E
+    S = SW.word_facing_S + SE.word_facing_S
+    W = NW.word_facing_W + SW.word_facing_W
     """
     nw, ne, sw, se = (arrangement[p] for p in ("nw", "ne", "sw", "se"))
     return {
-        "n": [primary(nw), primary(ne)],
-        "e": [secondary(ne), secondary(se)],
-        "s": [primary(sw), primary(se)],
-        "w": [secondary(nw), secondary(sw)],
+        "n": [word_at(nw, "n"), word_at(ne, "n")],
+        "e": [word_at(ne, "e"), word_at(se, "e")],
+        "s": [word_at(sw, "s"), word_at(se, "s")],
+        "w": [word_at(nw, "w"), word_at(sw, "w")],
     }
 
 
@@ -337,6 +335,7 @@ def get_state(request, code):
                     edges = get_edge_words(arrangement)
                     state["writing"] = {
                         "edges": edges,
+                        "arrangement": arrangement,
                         "clues": clover.data.get("clues", {}),
                         "submitted": clover.clues_submitted,
                     }

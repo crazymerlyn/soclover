@@ -83,33 +83,36 @@ class Clover(models.Model):
     data layout (JSONField):
     {
       "arrangement": {
-        "nw": {"words": ["OCEAN","WAVE"], "flipped": false, "card_idx": 0},
-        "ne": {"words": ["WOLF","HOWL"],  "flipped": true,  "card_idx": 5},
-        "sw": {"words": ["CROWN","SCEPTER"],"flipped":false,"card_idx":16},
-        "se": {"words": ["SPIDER","SILK"],"flipped": false, "card_idx": 14}
+        "nw": {"words": ["OCEAN","REEF","WAVE","SHELL"], "flipped": false, "card_idx": 0},
+        "ne": {"words": ["CASTLE","MOAT","DUNGEON","TOWER"], "flipped": true,  "card_idx": 1},
+        "sw": {"words": ["LIGHTNING","THUNDER","STORM","CLOUD"], "flipped": false, "card_idx": 2},
+        "se": {"words": ["CRYSTAL","JEWEL","DIAMOND","RING"], "flipped": false, "card_idx": 3}
       },
-      "clues": {"n": "sea", "e": "royalty", "s": "web", "w": "night"},
+      "clues": {"n": "weather", "e": "precious", "s": "water", "w": "fortress"},
       "cards": [           <-- filled after clues submitted, includes 2 red herrings
-        {"idx": 0, "words": ["OCEAN","WAVE"]},
+        {"idx": 0, "words": ["OCEAN","REEF","WAVE","SHELL"]},
         ...6 total, shuffled
       ]
     }
 
-    Board layout (cards at corners, clues at cardinal edges):
+    Board layout (2×2 grid of square cards, each with 4 words):
+      words[0]=top, words[1]=right, words[2]=bottom, words[3]=left
+
       [ N clue  ]
       [NW card]      [NE card]
         [ W clue ] [ center ] [ E clue ]
       [SW card]      [SE card]
       [ S clue  ]
 
-    Edge word derivation (flipped swaps which word faces which edge):
-      N = arrangement.nw primary   + arrangement.ne primary
-      E = arrangement.ne secondary + arrangement.se secondary
-      S = arrangement.sw primary   + arrangement.se primary
-      W = arrangement.nw secondary + arrangement.sw secondary
+    Edge word derivation (flipped rotates card 180°: top<->bottom, left<->right):
+      N = NW.word_facing_N   + NE.word_facing_N
+      E = NE.word_facing_E   + SE.word_facing_E
+      S = SW.word_facing_S   + SE.word_facing_S
+      W = NW.word_facing_W   + SW.word_facing_W
 
-    where primary  = words[0] if not flipped else words[1]
-          secondary= words[1] if not flipped else words[0]
+    word_facing(card, direction):
+      normal:  words[{n:0,e:1,s:2,w:3}[direction]]
+      flipped: words[{n:0,e:1,s:2,w:3}[direction] + 2) % 4]
     """
     player = models.OneToOneField(Player, on_delete=models.CASCADE, related_name='clover')
     data = models.JSONField(default=dict)
