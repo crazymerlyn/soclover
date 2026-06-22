@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand
 from django.utils import timezone
+from django.contrib.sessions.models import Session
 from datetime import timedelta
 from game.models import Room, Player, Clover, Guess
 
@@ -44,3 +45,15 @@ class Command(BaseCommand):
         # Delete old rooms (CASCADE will delete related objects)
         deleted_count = old_rooms.delete()[0]
         self.stdout.write(self.style.SUCCESS(f'Successfully deleted {deleted_count} old rooms.'))
+
+        # Clean up expired sessions (only for DB-backed sessions)
+        from django.conf import settings
+        if hasattr(settings, 'SESSION_ENGINE') and 'db' in settings.SESSION_ENGINE:
+            expired_sessions = Session.objects.filter(expire_date__lt=timezone.now())
+            session_count = expired_sessions.count()
+            if session_count > 0:
+                if dry_run:
+                    self.stdout.write(self.style.WARNING(f'DRY RUN: Would delete {session_count} expired sessions.'))
+                else:
+                    expired_sessions.delete()
+                    self.stdout.write(self.style.SUCCESS(f'Successfully deleted {session_count} expired sessions.'))
