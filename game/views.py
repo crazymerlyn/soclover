@@ -311,7 +311,7 @@ def get_state(request, code):
                     player.refresh_from_db()
 
     state = {
-        "status": room.status,
+        "phase": room.status,
         "room_code": room.code,
         "my_player_id": player.id,
         "is_host": player.is_host,
