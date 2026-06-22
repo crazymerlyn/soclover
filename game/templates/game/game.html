@@ -308,10 +308,11 @@ function renderSidebar(players, status) {
     const escapedName = escapeHtml(p.name);
     const jsEscapedName = escapeJs(p.name);
     const canKick = IS_HOST && !isMe;
+    const visitorBadge = p.is_visitor ? '<span style="font-size:.65rem;color:#999;margin-left:4px;">(visitor)</span>' : '';
     return `
       <div class="sp-item">
         <div class="sp-dot ${dotClass}"></div>
-        <span style="flex:1;${isMe?'font-weight:700':''}">${escapedName}${isMe?' (you)':''}</span>
+        <span style="flex:1;${isMe?'font-weight:700':''}">${escapedName}${visitorBadge}${isMe?' (you)':''}</span>
         <span class="sp-score" style="margin-right: 6px;">${p.score}</span>
         ${indicator ? `<span style="font-size:.8rem; margin-right: 6px;">${indicator}</span>` : ''}
         ${canKick ? `<button onclick="kickPlayer(${p.id}, '${jsEscapedName}')" style="background:none; border:none; color:var(--red); font-weight:bold; cursor:pointer; font-size:1rem; padding: 2px 4px; line-height: 1;">✕</button>` : ''}
@@ -344,6 +345,20 @@ function renderWriting(state) {
     document.getElementById('mainArea').innerHTML = `<div class="msg-error">${w.error}</div>`;
     return;
   }
+
+  // Visitors see a waiting message
+  if (w.visitor) {
+    document.getElementById('sidebarExtra').innerHTML = '';
+    document.getElementById('mainArea').innerHTML = `
+      <div class="section-box" style="text-align:center;padding:40px;">
+        <div style="font-size:2rem;margin-bottom:12px;">🍀</div>
+        <h3 style="color:var(--green);margin-bottom:8px;">You joined as a visitor</h3>
+        <p style="color:#666;">Wait for players to finish writing their clues.<br>
+        You'll be able to guess card positions once the guessing phase begins.</p>
+      </div>`;
+    return;
+  }
+
   const sub = w.submitted;
 
   // Count how many submitted

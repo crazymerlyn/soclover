@@ -76,3 +76,43 @@ class SoCloverTests(TestCase):
         response = self.client.post(reverse("kick_player", args=[room.code, guest.id]))
         self.assertEqual(response.status_code, 200)
         self.assertFalse(Player.objects.filter(id=guest.id).exists())
+
+    def test_any_player_can_start_game(self):
+        # Create room and join
+        self.client.post(reverse("home"), {"action": "create", "name": "Host"})
+        room = Room.objects.first()
+
+        guest_client = Client()
+        guest_client.post(reverse("home"), {"action": "join", "code": room.code, "name": "Guest"})
+
+        # Guest (non-host) starts the game
+        response = guest_client.post(reverse("start_game", args=[room.code]))
+        self.assertEqual(response.status_code, 200)
+        room.refresh_from_db()
+        self.assertEqual(room.status, Room.STATUS_WRITING)
+
+    def test_visitor_joins_in_progress_game(self):
+        # Create room, join, and start game
+        self.client.post(reverse("home"), {"action": "create", "name": "Host"})
+        room = Room.objects.first()
+
+        guest_client = Client()
+        guest_client.post(reverse("home"), {"action": "join", "code": room.code, "name": "Guest"})
+
+        self.client.post(reverse("start_game", args=[room.code]))
+        room.refresh_from_db()
+        self.assertEqual(room.status, Room.STATUS_WRITING)
+
+        # Visitor joins the in-progress game
+        visitor_client = Client()
+        response = visitor_client.post(reverse("home"), {"action": "join", "code": room.code, "name": "Visitor1"})
+        self.assertEqual(response.status_code, 302)
+
+        visitor = Player.objects.get(room=room, name="Visitor1")
+        self.assertTrue(visitor.is_visitor)
+
+        # Visitor should see waiting message in writing phase
+        response = visitor_client.get(reverse("get_state", args=[room.code]))
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["writing"]["visitor"])

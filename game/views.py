@@ -85,6 +85,7 @@ def players_list(room, include_submitted=False, include_guess_submitted=None):
             "id": p.id,
             "name": p.name,
             "is_host": p.is_host,
+            "is_visitor": p.is_visitor,
             "score": p.score,
         }
         if include_submitted:
@@ -131,11 +132,12 @@ def home(request):
                 room = Room.objects.filter(code=code).first()
                 if not room:
                     error = "Room not found. Check the code and try again."
-                elif room.status != Room.STATUS_LOBBY:
-                    error = "That game is already in progress."
+                elif room.status == Room.STATUS_FINISHED:
+                    error = "That game has already ended."
                 elif room.players.count() >= MAX_PLAYERS:
                     error = "Room is full (max {} players).".format(MAX_PLAYERS)
                 else:
+                    is_visitor = room.status != Room.STATUS_LOBBY
                     # Upsert player for this session with proper ordering
                     with transaction.atomic():
                         locked_room = Room.objects.select_for_update().get(id=room.id)
@@ -161,6 +163,7 @@ def home(request):
                                     defaults={
                                         "name": player_name,
                                         "is_host": False,
+                                        "is_visitor": is_visitor,
                                         "order": max_order + 1,
                                     },
                                 )
@@ -216,8 +219,8 @@ def start_game(request, code):
             return JsonResponse({"error": "Room not found."}, status=404)
         player = get_player(request, room)
 
-        if not player or not player.is_host:
-            return JsonResponse({"error": "Only the host can start the game."}, status=403)
+        if not player:
+            return JsonResponse({"error": "Player not found."}, status=403)
         if room.status != Room.STATUS_LOBBY:
             return JsonResponse({"error": "Game already started."}, status=400)
 
@@ -317,20 +320,23 @@ def get_state(request, code):
     # ── Writing phase ───────────────────────────────────────────────────────
     if room.status == Room.STATUS_WRITING:
         include_submitted = True
-        try:
-            clover = player.clover
-            arrangement = clover.data.get("arrangement")
-            if not arrangement:
+        if player.is_visitor:
+            state["writing"] = {"visitor": True, "submitted": True}
+        else:
+            try:
+                clover = player.clover
+                arrangement = clover.data.get("arrangement")
+                if not arrangement:
+                    state["writing"] = {"error": "Clover not yet assigned."}
+                else:
+                    edges = get_edge_words(arrangement)
+                    state["writing"] = {
+                        "edges": edges,
+                        "clues": clover.data.get("clues", {}),
+                        "submitted": clover.clues_submitted,
+                    }
+            except AttributeError:
                 state["writing"] = {"error": "Clover not yet assigned."}
-            else:
-                edges = get_edge_words(arrangement)
-                state["writing"] = {
-                    "edges": edges,
-                    "clues": clover.data.get("clues", {}),
-                    "submitted": clover.clues_submitted,
-                }
-        except AttributeError:
-            state["writing"] = {"error": "Clover not yet assigned."}
 
     # ── Guessing / Scoring phase ────────────────────────────────────────────
     elif room.status in (Room.STATUS_GUESSING, Room.STATUS_SCORING):
@@ -350,7 +356,8 @@ def get_state(request, code):
             is_owner = player.id == owner.id
 
             submitted_count = Guess.objects.filter(clover=clover, submitted=True).count()
-            total_guessers = len(ordered) - 1
+            # Only count non-owner, non-visitor players as required guessers
+            total_guessers = sum(1 for p in ordered if p.id != owner.id and not p.is_visitor)
 
             my_guess_data = None
             if not is_owner:
@@ -425,6 +432,9 @@ def submit_clues(request, code):
 
     if not player or room.status != Room.STATUS_WRITING:
         return JsonResponse({"error": "Invalid state."}, status=400)
+
+    if player.is_visitor:
+        return JsonResponse({"error": "Visitors cannot submit clues."}, status=403)
 
     try:
         body = json.loads(request.body)
