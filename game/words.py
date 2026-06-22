@@ -109,7 +109,7 @@ WORD_CARDS = [
     ("GOLD",      "MINE"),
     ("COAL",      "DIAMOND"),
     ("PAPER",     "CLIP"),
-    ("PEN",       "INK"),
+    ("PEN",       "WRITING"),
     ("PAINT",     "BRUSH"),
     ("STREET",    "SIGN"),
     ("CAR",       "TIRE"),
