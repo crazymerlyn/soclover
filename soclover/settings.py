@@ -21,6 +21,10 @@ if DEBUG:
     )
 
 ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+# Vercel provides VERCEL_URL with the deployment-specific hostname
+_vercel_url = os.environ.get('VERCEL_URL')
+if _vercel_url and _vercel_url not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_vercel_url)
 
 INSTALLED_APPS = [
     'django.contrib.admin',
