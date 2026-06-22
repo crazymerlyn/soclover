@@ -134,13 +134,17 @@ def home(request):
                 elif room.players.count() >= MAX_PLAYERS:
                     error = "Room is full (max {} players).".format(MAX_PLAYERS)
                 else:
-                    # Check if another player in this room already has this name
-                    if room.players.filter(name__iexact=player_name).exclude(session_key=sk).exists():
-                        error = "That name is already taken in this room. Please choose another name."
-                    else:
-                        # Upsert player for this session with proper ordering
-                        with transaction.atomic():
-                            locked_room = Room.objects.select_for_update().get(id=room.id)
+                    # Upsert player for this session with proper ordering
+                    with transaction.atomic():
+                        locked_room = Room.objects.select_for_update().get(id=room.id)
+                        # Check if player with same name exists (rejoin after session rotation)
+                        existing = locked_room.players.filter(name__iexact=player_name).first()
+                        if existing:
+                            # Update session key for existing player
+                            existing.session_key = sk
+                            existing.save(update_fields=['session_key'])
+                            player = existing
+                        else:
                             # Use Max aggregate to get safe order value
                             max_order = locked_room.players.aggregate(
                                 max_order=Max('order')
@@ -154,7 +158,7 @@ def home(request):
                                     "order": max_order + 1,
                                 },
                             )
-                        return redirect("lobby", code=room.code)
+                    return redirect("lobby", code=room.code)
 
     code_preset = request.GET.get("code", "").strip().upper()
     return render(request, "game/home.html", {
