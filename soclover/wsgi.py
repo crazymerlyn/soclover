@@ -10,5 +10,6 @@ application = get_wsgi_application()
 from django.core.management import call_command
 try:
     call_command('migrate', verbosity=0)
+    call_command('collectstatic', '--noinput', verbosity=0)
 except Exception:
     pass
