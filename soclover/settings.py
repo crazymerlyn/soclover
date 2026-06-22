@@ -75,10 +75,7 @@ DATABASES = {
 if DATABASES['default']['ENGINE'].endswith('sqlite3'):
     DATABASES['default'].setdefault('OPTIONS', {})['timeout'] = 20
 
-if ON_VERCEL:
-    SESSION_ENGINE = 'django.contrib.sessions.backends.signed_cookies'
-else:
-    SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+SESSION_ENGINE = 'django.contrib.sessions.backends.signed_cookies'
 SESSION_COOKIE_AGE = 86400  # 24 hours
 
 # Security headers that should always be enabled
