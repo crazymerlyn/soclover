@@ -519,6 +519,14 @@ def submit_guess(request, code):
 
         clover = owner.clover
 
+        # Validate guessed cards are from the dealt set (4 real + 2 herrings)
+        dealt_indices = {c["idx"] for c in clover.data.get("cards", [])}
+        if not dealt_indices:
+            return JsonResponse({"error": "No cards dealt for this clover."}, status=500)
+        for p in valid_positions:
+            if guess_arr[p]["idx"] not in dealt_indices:
+                return JsonResponse({"error": "Invalid card in guess."}, status=400)
+
         # Score: 1 point per position with correct card_idx
         correct_arr = clover.data["arrangement"]
         score = sum(
