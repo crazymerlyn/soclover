@@ -91,6 +91,49 @@ class SoCloverTests(TestCase):
         room.refresh_from_db()
         self.assertEqual(room.status, Room.STATUS_WRITING)
 
+    def test_get_state_returns_phase_field(self):
+        """Verify get_state returns 'phase' (not 'status') and correct structure."""
+        self.client.post(reverse("home"), {"action": "create", "name": "Host"})
+        room = Room.objects.first()
+
+        guest_client = Client()
+        guest_client.post(reverse("home"), {"action": "join", "code": room.code, "name": "Guest"})
+
+        # Lobby phase
+        response = self.client.get(reverse("get_state", args=[room.code]))
+        data = response.json()
+        self.assertIn("phase", data)
+        self.assertEqual(data["phase"], "lobby")
+        self.assertIn("players", data)
+        self.assertIn("my_player_id", data)
+        self.assertIn("is_host", data)
+
+        # Start game -> writing phase
+        self.client.post(reverse("start_game", args=[room.code]))
+        response = self.client.get(reverse("get_state", args=[room.code]))
+        data = response.json()
+        self.assertEqual(data["phase"], "writing")
+        self.assertIn("writing", data)
+        self.assertIn("edges", data["writing"])
+        self.assertIn("arrangement", data["writing"])
+        self.assertIn("clues", data["writing"])
+
+        # Submit clues -> guessing phase
+        host = Player.objects.get(room=room, name="Host")
+        arrangement = host.clover.data["arrangement"]
+        clues = {"n": "hintN", "e": "hintE", "s": "hintS", "w": "hintW"}
+        self.client.post(reverse("submit_clues", args=[room.code]),
+                         content_type="application/json",
+                         data=clues)
+        guest_client.post(reverse("submit_clues", args=[room.code]),
+                          content_type="application/json",
+                          data=clues)
+        response = self.client.get(reverse("get_state", args=[room.code]))
+        data = response.json()
+        self.assertEqual(data["phase"], "guessing")
+        self.assertIn("guessing", data)
+        self.assertNotIn("scoring", data)
+
     def test_visitor_joins_in_progress_game(self):
         # Create room, join, and start game
         self.client.post(reverse("home"), {"action": "create", "name": "Host"})

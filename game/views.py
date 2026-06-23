@@ -403,11 +403,11 @@ def get_state(request, code):
                             "arrangement": g.data,
                         }
                     )
-            state["scoring"] = {
-                "correct_arrangement": arr,
-                "correct_edges": edges,
-                "all_guesses": guesses_info,
-            }
+                state["scoring"] = {
+                    "correct_arrangement": arr,
+                    "correct_edges": edges,
+                    "all_guesses": guesses_info,
+                }
 
     # ── Finished ────────────────────────────────────────────────────────────
     elif room.status == Room.STATUS_FINISHED:
